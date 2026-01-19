@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PayBazaar Design System - Professional Financial Services Theme */
+
+@layer base {
+  :root {
+    /* PayBazaar Brand Colors */
+    --paybazaar-navy: 205 85% 15%; /* #072B4A */
+    --paybazaar-blue: 205 85% 30%; /* #075C89 */
+    --paybazaar-light: 205 100% 95%;
+    --paybazaar-accent: 205 85% 25%;
+    
+    /* Core Design System */
+    --background: 0 0% 100%;
+    --foreground: 205 85% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 205 85% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 205 85% 15%;
+
+    --primary: 205 85% 15%; /* PayBazaar Navy */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 205 85% 30%; /* PayBazaar Blue */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 205 25% 45%;
+
+    --accent: 205 100% 95%;
+    --accent-foreground: 205 85% 15%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 210 40% 91%;
+    --input: 210 40% 91%;
+    --ring: 205 85% 15%;
+
+    --radius: 0.75rem;
+
+    /* PayBazaar Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--paybazaar-navy)), hsl(var(--paybazaar-blue)));
+    --gradient-secondary: linear-gradient(135deg, hsl(var(--paybazaar-blue)), hsl(205 85% 40%));
+    --gradient-light: linear-gradient(135deg, hsl(var(--paybazaar-light)), hsl(0 0% 100%));
+
+    /* Shadows */
+    --shadow-primary: 0 10px 30px -10px hsl(var(--paybazaar-navy) / 0.3);
+    --shadow-card: 0 4px 20px -4px hsl(var(--paybazaar-navy) / 0.1);
+    --shadow-glow: 0 0 40px hsl(var(--paybazaar-blue) / 0.2);
+
+    /* Sidebar */
+    --sidebar-background: 205 85% 15%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 205 85% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 205 85% 20%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 205 85% 25%;
+    --sidebar-ring: 205 85% 30%;
+  }
+
+  .dark {
+    --background: 205 85% 8%;
+    --foreground: 0 0% 95%;
+
+    --card: 205 85% 10%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 205 85% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 205 85% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 205 85% 25%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 205 85% 12%;
+    --muted-foreground: 205 25% 65%;
+
+    --accent: 205 85% 12%;
+    --accent-foreground: 0 0% 95%;
+
+    --border: 205 85% 20%;
+    --input: 205 85% 20%;
+    --ring: 205 85% 30%;
+
+    --sidebar-background: 205 85% 6%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 205 85% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 205 85% 12%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 205 85% 15%;
+    --sidebar-ring: 205 85% 30%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  html {
+    font-family: 'Poppins', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  /* PayBazaar Component Styles */
+  .paybazaar-gradient {
+    background: var(--gradient-primary);
+  }
+
+  .paybazaar-gradient-light {
+    background: var(--gradient-light);
+  }
+
+  .paybazaar-shadow {
+    box-shadow: var(--shadow-primary);
+  }
+
+  .paybazaar-card-shadow {
+    box-shadow: var(--shadow-card);
+  }
+
+  .paybazaar-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Service Status Indicators */
+  .status-active {
+    @apply bg-success text-success-foreground;
+  }
+
+  .status-inactive {
+    @apply bg-destructive text-destructive-foreground;
+  }
+
+  .status-maintenance {
+    @apply bg-warning text-warning-foreground;
+  }
+
+  /* Financial Cards */
+  .finance-card {
+    @apply bg-card border border-border rounded-lg p-6 transition-all duration-300 hover:shadow-lg;
+  }
+
+  .finance-card:hover {
+    box-shadow: var(--shadow-card);
+  }
+}
