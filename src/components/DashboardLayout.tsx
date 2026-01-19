@@ -46,6 +46,19 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   const [openMenu, setOpenMenu] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const navigateToProfile = () => {
+  if (!user?.user_id) return;
+
+  if (user.user_id.startsWith("D")) {
+    navigate("/profilee");
+  } else if (user.user_id.startsWith("M")) {
+    navigate("/profile");
+  } else {
+    // fallback (optional safety)
+    navigate("/profile");
+  }
+};
+
 
   /* ---------- AUTH + TOKEN DECODE ---------- */
   useEffect(() => {
@@ -152,6 +165,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar role={role} />
+        
 
         <div className="flex-1 flex flex-col">
           {/* HEADER */}
@@ -205,21 +219,25 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
                         ID: {user?.user_id}
                       </div>
 
-                      <button
-                        onClick={() => navigate("/profile")}
-                        className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted"
-                      >
+                    <button
+  onClick={navigateToProfile}
+  className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted"
+>
+
                         <User className="h-4 w-4" />
                         Profile
                       </button>
 
-                      <button
-                        onClick={() => navigate("/documents")}
-                        className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted"
-                      >
-                        <FileText className="h-4 w-4" />
-                        Documents
-                      </button>
+                    <button
+  onClick={() => {
+    setOpenMenu(false); // just close menu
+  }}
+  className="flex w-full items-center gap-3 px-4 py-3 text-sm text-muted-foreground cursor-not-allowed"
+>
+  <FileText className="h-4 w-4" />
+  Documents
+</button>
+
 
                       <button
                         onClick={() => {

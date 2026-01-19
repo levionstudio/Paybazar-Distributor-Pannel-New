@@ -24,6 +24,8 @@ import MdRevertRequest from "./pages/MdRevertRequest";
 import MdRevertHistory from "./pages/MdRevertHistory";
 import DistributorRevertRequest from "./pages/DistributorRevertRequest";
 import DistributorRevertHistory from "./pages/DistributorRevertHistory";
+import Profile from "./pages/Profile";
+import MasterDistributorProfile from "./pages/ProfileMd";
 
 const queryClient = new QueryClient();
 
@@ -55,7 +57,8 @@ const App = () => (
           <Route path="/distributor/revert/request" element={<DistributorRevertRequest />} />
           <Route path="/md/revert/history" element={<MdRevertHistory />} />
           <Route path="/distributor/revert/history" element={<DistributorRevertHistory />} />
-
+         <Route path="/profile" element={<MasterDistributorProfile />} />
+          <Route path="/profilee" element={<Profile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
