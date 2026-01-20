@@ -32,7 +32,6 @@ const loginSchema = z.object({
   }),
 });
 
-
 type LoginFormData = z.infer<typeof loginSchema>;
 
 const Login = () => {
@@ -53,60 +52,57 @@ const Login = () => {
 
   const selectedRole = watch("role");
 
-const onSubmit = async (data: LoginFormData) => {
-  setIsLoading(true);
-  try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  const onSubmit = async (data: LoginFormData) => {
+    setIsLoading(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
-    const endpoint =
-      data.role === "master"
-        ? `${baseUrl}/md/login`
-        : `${baseUrl}/distributor/login`;
+      const endpoint =
+        data.role === "master"
+          ? `${baseUrl}/md/login`
+          : `${baseUrl}/distributor/login`;
 
-    // ✅ Payload matches backend models EXACTLY
-    const payload =
-      data.role === "master"
-        ? {
-            master_distributor_id: data.id,
-            master_distributor_password: data.password,
-          }
-        : {
-            distributor_id: data.id,
-            distributor_password: data.password,
-          };
+      // ✅ Payload matches backend models EXACTLY
+      const payload =
+        data.role === "master"
+          ? {
+              master_distributor_id: data.id,
+              password: data.password,
+            }
+          : {
+              distributor_id: data.id,
+              distributor_password: data.password,
+            };
 
-    const response = await axios.post(endpoint, payload);
-    const resData = response.data;
+      const response = await axios.post(endpoint, payload);
+      const resData = response.data;
 
-    if (resData?.status === "success" && resData?.data?.access_token) {
-      const token = resData.data.access_token;
+      if (resData?.status === "success" && resData?.data?.access_token) {
+        const token = resData.data.access_token;
 
-      localStorage.setItem("authToken", token);
-      localStorage.setItem("userRole", data.role);
+        localStorage.setItem("authToken", token);
+        localStorage.setItem("userRole", data.role);
 
+        toast({
+          title: "Login successful",
+          description: "Welcome back!",
+        });
+
+        navigate(data.role === "master" ? "/master" : "/distributor");
+      } else {
+        throw new Error(resData?.message || "Invalid credentials");
+      }
+    } catch (error: any) {
+      console.error("Login Error:", error);
       toast({
-        title: "Login successful",
-        description: "Welcome back!",
+        title: "Login Failed",
+        description: error.response?.data?.message || "Invalid ID or password",
+        variant: "destructive",
       });
-
-      navigate(data.role === "master" ? "/master" : "/distributor");
-    } else {
-      throw new Error(resData?.message || "Invalid credentials");
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error: any) {
-    console.error("Login Error:", error);
-    toast({
-      title: "Login Failed",
-      description:
-        error.response?.data?.message || "Invalid ID or password",
-      variant: "destructive",
-    });
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-
+  };
 
   return (
     <div className="h-screen w-screen overflow-hidden grid grid-cols-1 md:grid-cols-2">
@@ -182,127 +178,126 @@ const onSubmit = async (data: LoginFormData) => {
           <div className="bg-card rounded-2xl shadow-xl border p-6">
             <h3 className="text-xl font-semibold mb-4">Sign In</h3>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-  {/* USER ID */}
-  <div className="space-y-1">
-    <Label htmlFor="id">User ID</Label>
-    <Input
-      id="id"
-      type="text"
-      placeholder="M000003 / D000012"
-      {...register("id")}
-      className="h-10 font-mono"
-    />
-    {errors.id && (
-      <p className="text-xs text-destructive">
-        {errors.id.message}
-      </p>
-    )}
-  </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* USER ID */}
+              <div className="space-y-1">
+                <Label htmlFor="id">User ID</Label>
+                <Input
+                  id="id"
+                  type="text"
+                  placeholder="M000003 / D000012"
+                  {...register("id")}
+                  className="h-10 font-mono"
+                />
+                {errors.id && (
+                  <p className="text-xs text-destructive">
+                    {errors.id.message}
+                  </p>
+                )}
+              </div>
 
-  {/* PASSWORD */}
-  <div className="space-y-1">
-    <Label htmlFor="password">Password</Label>
-    <div className="relative">
-      <Input
-        id="password"
-        type={showPassword ? "text" : "password"}
-        placeholder="Enter your password"
-        {...register("password")}
-        className="h-10 pr-10"
-      />
-      <button
-        type="button"
-        onClick={() => setShowPassword(!showPassword)}
-        className="absolute right-3 top-1/2 -translate-y-1/2"
-        tabIndex={-1}
-      >
-        {showPassword ? (
-          <EyeOff className="w-4 h-4" />
-        ) : (
-          <Eye className="w-4 h-4" />
-        )}
-      </button>
-    </div>
-    {errors.password && (
-      <p className="text-xs text-destructive">
-        {errors.password.message}
-      </p>
-    )}
-  </div>
+              {/* PASSWORD */}
+              <div className="space-y-1">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    {...register("password")}
+                    className="h-10 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-xs text-destructive">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
 
-  {/* ROLE */}
-  <div className="space-y-2">
-    <Label>Select Role</Label>
-    <RadioGroup
-      value={selectedRole}
-      onValueChange={(value) =>
-        setValue("role", value as "master" | "distributor")
-      }
-    >
-      <div
-        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
-          selectedRole === "master"
-            ? "border-primary bg-accent/30"
-            : "border-border"
-        }`}
-        onClick={() => setValue("role", "master")}
-      >
-        <RadioGroupItem value="master" id="master" />
-        <Label
-          htmlFor="master"
-          className="flex items-center gap-2 cursor-pointer flex-1 text-sm"
-        >
-          <ShieldCheck className="w-4 h-4 text-primary" />
-          Master Distributor
-        </Label>
-      </div>
+              {/* ROLE */}
+              <div className="space-y-2">
+                <Label>Select Role</Label>
+                <RadioGroup
+                  value={selectedRole}
+                  onValueChange={(value) =>
+                    setValue("role", value as "master" | "distributor")
+                  }
+                >
+                  <div
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
+                      selectedRole === "master"
+                        ? "border-primary bg-accent/30"
+                        : "border-border"
+                    }`}
+                    onClick={() => setValue("role", "master")}
+                  >
+                    <RadioGroupItem value="master" id="master" />
+                    <Label
+                      htmlFor="master"
+                      className="flex items-center gap-2 cursor-pointer flex-1 text-sm"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-primary" />
+                      Master Distributor
+                    </Label>
+                  </div>
 
-      <div
-        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
-          selectedRole === "distributor"
-            ? "border-primary bg-accent/30"
-            : "border-border"
-        }`}
-        onClick={() => setValue("role", "distributor")}
-      >
-        <RadioGroupItem value="distributor" id="distributor" />
-        <Label
-          htmlFor="distributor"
-          className="flex items-center gap-2 cursor-pointer flex-1 text-sm"
-        >
-          <Wallet className="w-4 h-4 text-secondary" />
-          Distributor
-        </Label>
-      </div>
-    </RadioGroup>
-    {errors.role && (
-      <p className="text-xs text-destructive">
-        {errors.role.message}
-      </p>
-    )}
-  </div>
+                  <div
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
+                      selectedRole === "distributor"
+                        ? "border-primary bg-accent/30"
+                        : "border-border"
+                    }`}
+                    onClick={() => setValue("role", "distributor")}
+                  >
+                    <RadioGroupItem value="distributor" id="distributor" />
+                    <Label
+                      htmlFor="distributor"
+                      className="flex items-center gap-2 cursor-pointer flex-1 text-sm"
+                    >
+                      <Wallet className="w-4 h-4 text-secondary" />
+                      Distributor
+                    </Label>
+                  </div>
+                </RadioGroup>
+                {errors.role && (
+                  <p className="text-xs text-destructive">
+                    {errors.role.message}
+                  </p>
+                )}
+              </div>
 
-  {/* REMEMBER / FORGOT */}
-  <div className="flex items-center justify-between text-xs">
-    <label className="flex items-center gap-2">
-      <input type="checkbox" /> Remember me
-    </label>
-    <a href="#" className="text-primary hover:underline">
-      Forgot password?
-    </a>
-  </div>
+              {/* REMEMBER / FORGOT */}
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" /> Remember me
+                </label>
+                <a href="#" className="text-primary hover:underline">
+                  Forgot password?
+                </a>
+              </div>
 
-  {/* SUBMIT */}
-  <Button
-    type="submit"
-    className="w-full h-10 font-medium"
-    disabled={isLoading}
-  >
-    {isLoading ? "Signing in..." : "Sign In"}
-  </Button>
-</form>
-
+              {/* SUBMIT */}
+              <Button
+                type="submit"
+                className="w-full h-10 font-medium"
+                disabled={isLoading}
+              >
+                {isLoading ? "Signing in..." : "Sign In"}
+              </Button>
+            </form>
           </div>
         </div>
       </div>

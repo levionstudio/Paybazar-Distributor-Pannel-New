@@ -1,45 +1,45 @@
-import { useState, useEffect, useCallback } from "react"
-import axios from "axios"
-import { jwtDecode } from "jwt-decode"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import { jwtDecode } from "jwt-decode";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Building2, Copy, CheckCircle2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useNavigate } from "react-router-dom"
-import { DashboardLayout } from "@/components/DashboardLayout"
+} from "@/components/ui/card";
+import { Building2, Copy, CheckCircle2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { DashboardLayout } from "@/components/DashboardLayout";
 
 /* -------------------- TYPES -------------------- */
 
 interface TokenData {
-  admin_id: string
-  user_id: string
-  user_name: string
-  user_role: string
-  exp: number
-  iat: number
+  admin_id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
+  exp: number;
+  iat: number;
 }
 
 /* -------------------- COMPONENT -------------------- */
 
 const RequestFunds = () => {
-  const { toast } = useToast()
-  const navigate = useNavigate()
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     bank_name: "",
@@ -47,14 +47,15 @@ const RequestFunds = () => {
     utr_number: "",
     amount: "",
     remarks: "",
-  })
+  });
 
-  const [loading, setLoading] = useState(false)
-  const [tokenData, setTokenData] = useState<TokenData | null>(null)
-  const [role, setRole] = useState<string | null>(null)
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
-  const [walletBalance, setWalletBalance] = useState<number>(0)
-  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false);
+  const [tokenData, setTokenData] = useState<TokenData | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [banks, setBanks] = useState<any[]>([])
 
   /* -------------------- BANK DETAILS -------------------- */
 
@@ -71,127 +72,147 @@ const RequestFunds = () => {
       accountNumber: "10248252306",
       ifscCode: "IDFB0020137",
     },
-  ]
+  ];
 
   const copyToClipboard = (text: string, field: string, bankIndex: number) => {
-    navigator.clipboard.writeText(text)
-    setCopiedField(`${field}-${bankIndex}`)
-    toast({ title: "Copied!", description: `${field} copied to clipboard` })
-    setTimeout(() => setCopiedField(null), 2000)
-  }
+    navigator.clipboard.writeText(text);
+    setCopiedField(`${field}-${bankIndex}`);
+    toast({ title: "Copied!", description: `${field} copied to clipboard` });
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const redirectTo = useCallback(
     (path: string) => navigate(path, { replace: true }),
     [navigate]
-  )
+  );
 
   /* -------------------- AUTH CHECK -------------------- */
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken")
-    const userRole = localStorage.getItem("userRole")
+    const token = localStorage.getItem("authToken");
+    const userRole = localStorage.getItem("userRole");
 
     if (!token || !userRole) {
-      redirectTo("/login")
-      return
+      redirectTo("/login");
+      return;
     }
 
     try {
-      const decoded: TokenData = jwtDecode(token)
+      const decoded: TokenData = jwtDecode(token);
 
       if (decoded.exp * 1000 < Date.now()) {
-        localStorage.removeItem("authToken")
-        localStorage.removeItem("userRole")
-        redirectTo("/login")
-        return
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("userRole");
+        redirectTo("/login");
+        return;
       }
 
-      setTokenData(decoded)
-      setRole(userRole)
+      setTokenData(decoded);
+      setRole(userRole);
     } catch (err) {
-      console.error("Token decode failed", err)
-      localStorage.removeItem("authToken")
-      localStorage.removeItem("userRole")
-      redirectTo("/login")
+      console.error("Token decode failed", err);
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userRole");
+      redirectTo("/login");
     } finally {
-      setIsCheckingAuth(false)
+      setIsCheckingAuth(false);
     }
-  }, [redirectTo])
+  }, [redirectTo]);
+
+
+  useEffect(() => {
+    const fetchBanks = async () => {
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/bank/get/all`,{
+        headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
+      })
+      console.log("Banks:", res.data.data.banks)
+      if (res.data.status === "success") {
+        setBanks(res.data.data.banks)
+      }
+    }
+    fetchBanks()
+  },[])
 
   /* -------------------- WALLET BALANCE -------------------- */
 
   useEffect(() => {
     const fetchWalletBalance = async () => {
-      const token = localStorage.getItem("authToken")
-      if (!token || !tokenData) return
+      const token = localStorage.getItem("authToken");
+      if (!token || !tokenData) return;
 
       try {
         const res = await axios.get(
-          `${import.meta.env.VITE_API_BASE_URL}/wallet/get/balance/${tokenData.user_id}`,
+          `${import.meta.env.VITE_API_BASE_URL}/wallet/get/balance/${
+            tokenData.user_id
+          }`,
           { headers: { Authorization: `Bearer ${token}` } }
-        )
+        );
 
         if (res.data.status === "success") {
-          setWalletBalance(Number(res.data.data.balance))
+          setWalletBalance(Number(res.data.data.balance));
         }
       } catch {
-        setWalletBalance(0)
+        setWalletBalance(0);
       }
-    }
+    };
 
-    fetchWalletBalance()
-  }, [tokenData])
+    fetchWalletBalance();
+  }, [tokenData]);
 
   /* -------------------- FORM HELPERS -------------------- */
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const { id, value } = e.target
-    setFormData((prev) => ({ ...prev, [id]: value }))
-  }
+    const { id, value } = e.target;
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  };
 
   const validateForm = () => {
-    if (!formData.bank_name) return toastError("Please select a bank")
-    if (!formData.request_date) return toastError("Request date is required")
-    if (!formData.utr_number) return toastError("UTR number is required")
+    if (!formData.bank_name) return toastError("Please select a bank");
+    if (!formData.request_date) return toastError("Request date is required");
+    if (!formData.utr_number) return toastError("UTR number is required");
     if (!formData.amount || Number(formData.amount) <= 0)
-      return toastError("Amount must be greater than 0")
-    return true
-  }
+      return toastError("Amount must be greater than 0");
+    return true;
+  };
 
   const toastError = (msg: string) => {
-    toast({ title: "Validation Error", description: msg, variant: "destructive" })
-    return false
-  }
+    toast({
+      title: "Validation Error",
+      description: msg,
+      variant: "destructive",
+    });
+    return false;
+  };
 
   /* -------------------- SUBMIT -------------------- */
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!tokenData) {
-      redirectTo("/login")
-      return
+      redirectTo("/login");
+      return;
     }
 
-    if (!validateForm()) return
+    if (!validateForm()) return;
 
-    const token = localStorage.getItem("authToken")
-    if (!token) return redirectTo("/login")
+    const token = localStorage.getItem("authToken");
+    if (!token) return redirectTo("/login");
 
     const payload = {
       requester_id: tokenData.user_id,
       request_to_id: tokenData.admin_id,
       amount: Number(formData.amount),
       bank_name: formData.bank_name,
-      request_date: formData.request_date,
+      request_date: new Date(formData.request_date).toISOString(),
       utr_number: formData.utr_number,
       remarks: formData.remarks.trim() || "Admin, please approve",
-    }
+    };
 
     try {
-      setLoading(true)
+      setLoading(true);
 
       const { data } = await axios.post(
         `${import.meta.env.VITE_API_BASE_URL}/fund_request/create`,
@@ -202,10 +223,10 @@ const RequestFunds = () => {
             "Content-Type": "application/json",
           },
         }
-      )
+      );
 
       if (data.status === "success") {
-        toast({ title: "Success", description: data.message })
+        toast({ title: "Success", description: data.message });
 
         setFormData({
           bank_name: "",
@@ -213,30 +234,29 @@ const RequestFunds = () => {
           utr_number: "",
           amount: "",
           remarks: "",
-        })
+        });
 
         setTimeout(
           () => redirectTo(role === "master" ? "/master" : "/distributor"),
           1200
-        )
+        );
       } else {
         toast({
           title: "Request Failed",
           description: data.message,
           variant: "destructive",
-        })
+        });
       }
     } catch (err: any) {
       toast({
         title: "Request Failed",
-        description:
-          err.response?.data?.message || "Something went wrong",
+        description: err.response?.data?.message || "Something went wrong",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   /* -------------------- LOADING -------------------- */
 
@@ -247,14 +267,13 @@ const RequestFunds = () => {
           Checking authentication...
         </div>
       </DashboardLayout>
-    )
+    );
   }
 
   /* -------------------- UI (UNCHANGED) -------------------- */
 
   return (
-    <DashboardLayout role="master" >
-     
+    <DashboardLayout role="master">
       <div className="flex-1 bg-muted/10">
         <main className="flex flex-col items-center p-6">
           {/* Bank Details Section */}
@@ -350,9 +369,9 @@ const RequestFunds = () => {
                 </div>
                 <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
                   <p className="text-sm text-blue-900 dark:text-blue-100">
-                    <strong>Note:</strong> After transferring funds, please
-                    fill the form below with your transaction details (UTR
-                    number, amount, etc.) to complete the fund request.
+                    <strong>Note:</strong> After transferring funds, please fill
+                    the form below with your transaction details (UTR number,
+                    amount, etc.) to complete the fund request.
                   </p>
                 </div>
               </CardContent>
@@ -401,26 +420,24 @@ const RequestFunds = () => {
                           <SelectValue placeholder="Select Bank" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="State Bank of India">
-                            State Bank of India
-                          </SelectItem>
-                          <SelectItem value="HDFC">HDFC</SelectItem>
-                          <SelectItem value="AU Bank">AU Bank</SelectItem>
-                          <SelectItem value="Ujjivan Bank">
-                            Ujjivan Bank
-                          </SelectItem>
-                          <SelectItem value="IDFC">IDFC</SelectItem>
-                          <SelectItem value="Kotak">Kotak</SelectItem>
-                          <SelectItem value="Indusland Bank">
-                            Indusland Bank
-                          </SelectItem>
-                          <SelectItem value="RBL">RBL</SelectItem>
-                          <SelectItem value="Axis Bank">Axis Bank</SelectItem>
-                          <SelectItem value="ICICI">ICICI</SelectItem>
-                          <SelectItem value="Advance Credit">
-                            Advance Credit
-                          </SelectItem>
-                          <SelectItem value="Yes Bank">Yes Bank</SelectItem>
+                         {
+                           banks.map((bank) => (
+                             <SelectItem
+                               key={bank.bank_name}
+                               value={bank.bank_name}
+                             >
+                               <div className="flex flex-col">
+                                 <div className="flex items-center gap-2">
+                                   <Building2 className="h-4 w-4" />
+                                   <span className="font-medium">{bank.bank_name}</span>
+                                 </div>
+                                 <span className="text-xs text-muted-foreground">
+                                   {bank.bank_address}
+                                 </span>
+                               </div>
+                             </SelectItem>
+                           ))
+                         }
                         </SelectContent>
                       </Select>
                     </div>
@@ -431,8 +448,7 @@ const RequestFunds = () => {
                         htmlFor="request_date"
                         className="flex items-center gap-1 text-sm font-semibold text-foreground"
                       >
-                        Request Date{" "}
-                        <span className="text-destructive">*</span>
+                        Request Date <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="request_date"

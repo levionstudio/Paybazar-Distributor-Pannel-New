@@ -50,6 +50,21 @@ const RequestFundsDistributor = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [banks, setBanks] = useState<any[]>([])
+  
+      useEffect(() => {
+        const fetchBanks = async () => {
+          const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/bank/get/all`,{
+            headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
+          })
+          console.log("Banks:", res.data.data.banks)
+          if (res.data.status === "success") {
+            setBanks(res.data.data.banks)
+          }
+        }
+        fetchBanks()
+      },[])
+    
 
   // Bank details for fund transfer
   const companyBankDetails = [
@@ -254,7 +269,7 @@ const RequestFundsDistributor = () => {
       requester_id: tokenData.user_id, // Distributor ID
       request_to_id: tokenData.admin_id, // Admin ID (who they're requesting TO)
       bank_name: formData.bank_name,
-      request_date: formData.request_date,
+      request_date: new Date(formData.request_date).toISOString(),
       utr_number: formData.utr_number,
       amount: parseFloat(formData.amount),
       remarks: formData.remarks.trim() || "Admin, please approve",
@@ -532,26 +547,24 @@ const RequestFundsDistributor = () => {
                         <SelectValue placeholder="Select Bank" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="State Bank of India">
-                          State Bank of India
-                        </SelectItem>
-                        <SelectItem value="HDFC">HDFC</SelectItem>
-                        <SelectItem value="AU Bank">AU Bank</SelectItem>
-                        <SelectItem value="Ujjivan Bank">
-                          Ujjivan Bank
-                        </SelectItem>
-                        <SelectItem value="IDFC">IDFC</SelectItem>
-                        <SelectItem value="Kotak">Kotak</SelectItem>
-                        <SelectItem value="Indusland Bank">
-                          Indusland Bank
-                        </SelectItem>
-                        <SelectItem value="RBL">RBL</SelectItem>
-                        <SelectItem value="Axis Bank">Axis Bank</SelectItem>
-                        <SelectItem value="ICICI">ICICI</SelectItem>
-                        <SelectItem value="Advance Credit">
-                          Advance Credit
-                        </SelectItem>
-                        <SelectItem value="Yes Bank">Yes Bank</SelectItem>
+                      {
+                           banks.map((bank) => (
+                             <SelectItem
+                               key={bank.bank_name}
+                               value={bank.bank_name}
+                             >
+                               <div className="flex flex-col">
+                                 <div className="flex items-center gap-2">
+                                   <Building2 className="h-4 w-4" />
+                                   <span className="font-medium">{bank.bank_name}</span>
+                                 </div>
+                                 <span className="text-xs text-muted-foreground">
+                                   {bank.bank_address}
+                                 </span>
+                               </div>
+                             </SelectItem>
+                           ))
+                         }
                       </SelectContent>
                     </Select>
                   </div>

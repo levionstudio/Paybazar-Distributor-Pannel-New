@@ -326,14 +326,14 @@ const MdFundRetailer = () => {
 
       if (response.ok && data.status === "success") {
         const retailer = data.data.retailer;
-
-        const details: RetailerDetails = {
-          name: retailer.Name || "N/A",
-          phone: retailer.Phone || "N/A",
-          userId: retailer.RetailerID || "N/A",
-          currentBalance: Number(retailer.WalletBalance) || 0,
+        console.log("Retailer:", retailer);
+        const details = {
+          name: retailer.retailer_name || "N/A",
+          phone: retailer.retailer_phone || "N/A",
+          userId: retailer.retailer_id || "N/A",
+          currentBalance: Number(retailer.wallet_balance) || 0,
         };
-
+        console.log("Retailer Details:", details);
         setRetailerDetails(details);
       } else {
         console.error("Failed to fetch retailer details:", data);
@@ -579,10 +579,10 @@ const MdFundRetailer = () => {
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                 <User className="h-4 w-4" />
-                                <span className="font-medium">{distributor.name}</span>
+                                <span className="font-medium">{distributor.distributor_name}</span>
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {distributor.phone} • Balance: ₹{distributor.wallet_balance.toLocaleString("en-IN", {
+                                {distributor.distributor_phone} • Balance: ₹{distributor.wallet_balance.toLocaleString("en-IN", {
                                   minimumFractionDigits: 2,
                                   maximumFractionDigits: 2,
                                 })}
@@ -634,10 +634,10 @@ const MdFundRetailer = () => {
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
                                   <User className="h-4 w-4" />
-                                  <span className="font-medium">{retailer.name}</span>
+                                  <span className="font-medium">{retailer.retailer_name}</span>
                                 </div>
                                 <span className="text-xs text-muted-foreground">
-                                  {retailer.phone} • Balance: ₹{retailer.wallet_balance.toLocaleString("en-IN", {
+                                  {retailer.retailer_phone} • Balance: ₹{retailer.wallet_balance.toLocaleString("en-IN", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   })}

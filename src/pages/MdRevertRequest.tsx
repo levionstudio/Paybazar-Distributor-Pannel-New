@@ -211,10 +211,10 @@ export default function MdRevertRequest() {
           user = data.data.distributor;
           
           const details: UserDetails = {
-            name: user.Name || "N/A",
-            phone: user.Phone || "N/A",
-            userId: user.DistributorID || "N/A",
-            currentBalance: Number(user.WalletBalance) || 0,
+            name: user.distributor_name || "N/A",
+            phone: user.distributor_phone || "N/A",
+            userId: user.distributor_id || "N/A",
+            currentBalance: Number(user.wallet_balance) || 0,
           };
           
           setUserDetails(details);
@@ -223,10 +223,10 @@ export default function MdRevertRequest() {
           user = data.data.retailer;
           
           const details: UserDetails = {
-            name: user.Name || "N/A",
-            phone: user.Phone || "N/A",
-            userId: user.RetailerID || "N/A",
-            currentBalance: Number(user.WalletBalance) || 0,
+            name: user.retailer_name || "N/A",
+            phone: user.retailer_phone || "N/A",
+            userId: user.retailer_id || "N/A",
+            currentBalance: Number(user.wallet_balance) || 0,
           };
           
           setUserDetails(details);
@@ -487,10 +487,10 @@ export default function MdRevertRequest() {
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2">
                                     <User className="h-4 w-4" />
-                                    <span className="font-medium">{distributor.name}</span>
+                                    <span className="font-medium">{distributor.distributor_name}</span>
                                   </div>
                                   <span className="text-xs text-muted-foreground">
-                                    {distributor.phone} • Balance: ₹{formatAmount(distributor.wallet_balance)}
+                                    {distributor.distributor_phone} • Balance: ₹{formatAmount(distributor.wallet_balance)}
                                   </span>
                                 </div>
                               </SelectItem>
@@ -504,10 +504,10 @@ export default function MdRevertRequest() {
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2">
                                     <User className="h-4 w-4" />
-                                    <span className="font-medium">{retailer.name}</span>
+                                    <span className="font-medium">{retailer.retailer_name}</span>
                                   </div>
                                   <span className="text-xs text-muted-foreground">
-                                    {retailer.phone} • Balance: ₹{formatAmount(retailer.wallet_balance)}
+                                    {retailer.retailer_phone} • Balance: ₹{formatAmount(retailer.wallet_balance)}
                                   </span>
                                 </div>
                               </SelectItem>

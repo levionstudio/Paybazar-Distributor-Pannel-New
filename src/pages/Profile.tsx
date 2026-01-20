@@ -209,7 +209,7 @@ export default function DistributorProfile() {
 
         // Fetch distributor data
         const response = await axios.get(
-          `https://paybazaar-new.onrender.com/distributor/get/distributor/${decoded.user_id}`,
+          `${import.meta.env.VITE_API_BASE_URL}/distributor/get/distributor/${decoded.user_id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -223,26 +223,26 @@ export default function DistributorProfile() {
 
           // Map API data to display format
           setUserInfo({
-            name: distributorData.Name || "",
-            userId: distributorData.DistributorID || "",
-            kycStatus: distributorData.KYCStatus ? "VERIFIED" : "NOT VERIFIED",
+            name: distributorData.distributor_name || "",
+            userId: distributorData.distributor_id || "",
+            kycStatus: distributorData.kyc_status ? "VERIFIED" : "NOT VERIFIED",
             avatar: "/lovable-uploads/c0876286-fbc5-4e25-b7e8-cb81e868b3fe.png",
-            businessName: distributorData.BusinessName || "",
-            businessType: distributorData.BusinessType || "",
-            gstNumber: distributorData.GSTNumber || "Not Provided",
-            mobileNo: distributorData.Phone || "",
-            email: distributorData.Email || "",
-            dateOfBirth: formatDateForDisplay(distributorData.DateOfBirth || ""),
-            gender: distributorData.Gender || "",
-            aadhaarNumber: distributorData.AadharNumber || "",
-            panNumber: distributorData.PanNumber || "",
-            city: distributorData.City || "",
-            state: distributorData.State || "",
-            pinCode: distributorData.Pincode || "",
-            address: distributorData.Address || "",
-            walletBalance: distributorData.WalletBalance || 0,
-            isBlocked: distributorData.IsBlocked || false,
-            masterDistributorId: distributorData.MasterDistributorID || "",
+            businessName: distributorData.business_name || "",
+            businessType: distributorData.business_type || "",
+            gstNumber: distributorData.gst_number || "Not Provided",
+            mobileNo: distributorData.distributor_phone || "",
+            email: distributorData.distributor_email || "",
+            dateOfBirth: formatDateForDisplay(distributorData.date_of_birth || ""),
+            gender: distributorData.gender || "",
+            aadhaarNumber: distributorData.aadhar_number || "",
+            panNumber: distributorData.pan_number || "",
+            city: distributorData.city || "",
+            state: distributorData.state || "",
+            pinCode: distributorData.pincode || "",
+            address: distributorData.address || "",
+            walletBalance: distributorData.wallet_balance || 0,
+            isBlocked: distributorData.is_blocked || false,
+            masterDistributorId: distributorData.master_distributor_id || "",
             documentsUrl: distributorData.DocumentsURL || "",
           });
 

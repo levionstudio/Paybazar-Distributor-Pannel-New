@@ -519,7 +519,7 @@ export default function DistributorRevertHistory() {
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                       min={startDate}
-                      max={getTodayDate()}
+                      // max={getTodayDate()+}
                       className="h-11 bg-background"
                       disabled={isLoadingData}
                     />

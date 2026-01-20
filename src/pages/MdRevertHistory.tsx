@@ -512,7 +512,6 @@ export default function MdRevertHistory() {
                       value={startDate}
                       onChange={(e) => {
                         setStartDate(e.target.value);
-                        setEndDate(e.target.value);
                       }}
                       max={getTodayDate()}
                       className="h-11 bg-background"
@@ -531,6 +530,7 @@ export default function MdRevertHistory() {
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                       min={startDate}
+                     
                       max={getTodayDate()}
                       className="h-11 bg-background"
                       disabled={isLoadingData}

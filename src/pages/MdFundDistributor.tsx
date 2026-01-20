@@ -244,10 +244,10 @@ const MdFundDistributor = () => {
         const distributor = data.data.distributor;
 
         const details: DistributorDetails = {
-          name: distributor.Name || "N/A",
-          phone: distributor.Phone || "N/A",
-          userId: distributor.DistributorID || "N/A",
-          currentBalance: Number(distributor.WalletBalance) || 0,
+          name: distributor.distributor_name || "N/A",
+          phone: distributor.distributor_phone || "N/A",
+          userId: distributor.distributor_id || "N/A",
+          currentBalance: Number(distributor.wallet_balance) || 0,
         };
 
         setDistributorDetails(details);
@@ -493,10 +493,10 @@ const MdFundDistributor = () => {
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                 <User className="h-4 w-4" />
-                                <span className="font-medium">{distributor.name}</span>
+                                <span className="font-medium">{distributor.distributor_name}</span>
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {distributor.phone} • Balance: ₹{distributor.wallet_balance.toLocaleString("en-IN", {
+                                {distributor.distributor_phone} • Balance: ₹{distributor.wallet_balance.toLocaleString("en-IN", {
                                   minimumFractionDigits: 2,
                                   maximumFractionDigits: 2,
                                 })}

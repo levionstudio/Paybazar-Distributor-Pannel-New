@@ -171,10 +171,10 @@ export default function DistributorRevertRequest() {
         const retailer = data.data.retailer;
         
         const details: UserDetails = {
-          name: retailer.Name || "N/A",
-          phone: retailer.Phone || "N/A",
-          userId: retailer.RetailerID || "N/A",
-          currentBalance: Number(retailer.WalletBalance) || 0,
+          name: retailer.retailer_name || "N/A",
+          phone: retailer.retailer_phone || "N/A",
+          userId: retailer.retailer_id || "N/A",
+          currentBalance: Number(retailer.wallet_balance) || 0,
         };
         
         setUserDetails(details);
@@ -209,7 +209,7 @@ export default function DistributorRevertRequest() {
     }
 
     const revertAmount = parseFloat(amount);
-    if (revertAmount > userDetails.currentBalance) {
+    if (revertAmount > retailers.wallet_balance) {
       console.error("Insufficient balance:", {
         requested: revertAmount,
         available: userDetails.currentBalance,
@@ -390,10 +390,10 @@ export default function DistributorRevertRequest() {
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                 <User className="h-4 w-4" />
-                                <span className="font-medium">{retailer.name}</span>
+                                <span className="font-medium">{retailer.retailer_name}</span>
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {retailer.phone} • Balance: ₹{formatAmount(retailer.wallet_balance)}
+                                {retailer.retailer_phone} • Balance: ₹{formatAmount(retailer.wallet_balance)}
                               </span>
                             </div>
                           </SelectItem>
