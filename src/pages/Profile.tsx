@@ -469,14 +469,14 @@ export default function DistributorProfile() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                          <Button
+                          {/* <Button
                             variant="secondary"
                             onClick={() => navigate("/profilee")}
                             className="bg-white/10 hover:bg-white/20 text-white border-white/20"
                           >
                             <Edit className="h-4 w-4 mr-2" />
                             Update Profile
-                          </Button>
+                          </Button> */}
                           <div className="bg-white/10 px-4 py-2 rounded-lg">
                             <p className="text-white/70 text-xs">Wallet Balance</p>
                             <p className="text-white font-bold text-lg">
@@ -693,14 +693,14 @@ export default function DistributorProfile() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Button
+                      {/* <Button
                         variant="outline"
                         className="justify-start"
                         onClick={() => navigate("/profilee")}
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Profile
-                      </Button>
+                      </Button> */}
                       <Button 
                         variant="outline" 
                         className="justify-start"
@@ -709,10 +709,10 @@ export default function DistributorProfile() {
                         <Upload className="h-4 w-4 mr-2" />
                         Upload Documents
                       </Button>
-                      <Button variant="outline" className="justify-start">
-                        <CreditCard className="h-4 w-4 mr-2" />
+                      {/* <Button variant="outline" className="justify-start"> */}
+                        {/* <CreditCard className="h-4 w-4 mr-2" />
                         View KYC Status
-                      </Button>
+                      </Button> */}
                     </div>
                   </CardContent>
                 </Card>
