@@ -90,21 +90,21 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
 
     
 
-  // Bank details for fund transfer
-  const companyBankDetails = [
-    {
-      bankName: "AXIS BANK",
-      accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-      accountNumber: "925020043148912",
-      ifscCode: "UTIB0000056",
-    },
-    {
-      bankName: "IDFC FIRST Bank",
-      accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-      accountNumber: "10248252306",
-      ifscCode: "IDFB0020137",
-    },
-  ];
+  // // Bank details for fund transfer
+  // const companyBankDetails = [
+  //   {
+  //     bankName: "AXIS BANK",
+  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
+  //     accountNumber: "925020043148912",
+  //     ifscCode: "UTIB0000056",
+  //   },
+  //   {
+  //     bankName: "IDFC FIRST Bank",
+  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
+  //     accountNumber: "10248252306",
+  //     ifscCode: "IDFB0020137",
+  //   },
+  // ];
 
   const copyToClipboard = (text: string, field: string, bankIndex: number) => {
     navigator.clipboard.writeText(text);
@@ -415,19 +415,19 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
+            {/* <div>
               <h1 className="text-2xl font-bold">Request E-Value</h1>
               <p className="mt-1 text-sm text-white/80">
                 Submit your fund request with transaction details
               </p>
-            </div>
+            </div> */}
           </div>
         </div>
 
         {/* Main Content */}
         <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
           {/* Bank Details Section */}
-          <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
+          {/* <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
             <CardHeader className="paybazaar-gradient rounded-none border-b border-border/40 text-white">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-1 rounded-full bg-white/30"></div>
@@ -528,7 +528,7 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
                 </p>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Fund Request Form */}
           <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">

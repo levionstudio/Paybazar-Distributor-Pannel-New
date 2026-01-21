@@ -11,6 +11,7 @@ import {
   FileText,
   RotateCcw,
   ArrowRightLeft,
+  FileBarChart,
 } from "lucide-react"
 
 import { jwtDecode } from "jwt-decode"
@@ -58,6 +59,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
   const [fundRequestOpen, setFundRequestOpen] = useState(false)
   const [fundTransferOpen, setFundTransferOpen] = useState(false)
   const [revertOpen, setRevertOpen] = useState(false)
+  const [tdsOpen, setTdsOpen] = useState(false)
 
   const iconClass = "h-5 w-5"
 
@@ -103,6 +105,11 @@ export function AppSidebar({ role }: AppSidebarProps) {
     ) {
       setRevertOpen(true)
     }
+    if (
+      pathname.includes("/tds")
+    ) {
+      setTdsOpen(true)
+    }
   }, [pathname])
 
   const initials = userName?.[0]?.toUpperCase() || (role === "master" ? "MD" : "DR")
@@ -113,12 +120,13 @@ export function AppSidebar({ role }: AppSidebarProps) {
   
   const fundRequestItems = role === "master" 
     ? [
-        { title: "Request Funds", href: "/request-funds" },
-        { title: "Requested Funds", href: "/md/requestfund" },
+        { title: "Add Funds", href: "/request-funds" },
+        { title: "Fund Request", href: "/md/requestfund" },
+
       ]
     : [
-        { title: "Request Funds", href: "/request-funds/distributor" },
-        { title: "Requested Funds", href: "/distributor/requestedfund" },
+        { title: "Add Funds", href: "/request-funds/distributor" },
+        { title: "Fund Request", href: "/distributor/requestedfund" },
       ]
 
   const fundTransferItems = role === "master"
@@ -138,6 +146,14 @@ export function AppSidebar({ role }: AppSidebarProps) {
     : [
         { title: "Revert Request", href: "/distributor/revert/request" },
         { title: "Revert History", href: "/distributor/revert/history" },
+      ]
+
+  const tdsItems = role === "master"
+    ? [
+        { title: "TDS History", href: "/md/tds/history" },
+      ]
+    : [
+        { title: "TDS History", href: "/distributor/tds/history" },
       ]
 
   return (
@@ -260,7 +276,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
                   >
                     <div className="flex items-center gap-3">
                       <FileText className={iconClass} />
-                      <span>Fund Requests</span>
+                      <span>Fund</span>
                     </div>
                     {fundRequestOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </CollapsibleTrigger>
@@ -383,6 +399,64 @@ export function AppSidebar({ role }: AppSidebarProps) {
 
                   <CollapsibleContent className="mt-1 space-y-1">
                     {revertItems.map((item) => (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center px-3 py-2 pl-11 rounded-lg text-sm transition-all ${
+                          pathname === item.href
+                            ? "text-sidebar-foreground border border-white"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 border-transparent"
+                        }`}
+                      >
+                        {item.title}
+                      </a>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {/* TDS COLLAPSIBLE */}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              {isCollapsed ? (
+                // COLLAPSED MODE (just icon)
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <a
+                        href={tdsItems[0].href}
+                        className={`flex items-center rounded-lg px-2 py-2 justify-center transition-all ${
+                          tdsItems.some(item => pathname === item.href)
+                            ? "text-sidebar-primary-foreground border border-white"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent border-transparent"
+                        }`}
+                      >
+                        <FileBarChart className={iconClass} />
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              ) : (
+                // EXPANDED MODE
+                <Collapsible open={tdsOpen} onOpenChange={setTdsOpen}>
+                  <CollapsibleTrigger
+                    className={`flex w-full items-center justify-between px-3 py-2 rounded-lg transition-all ${
+                      tdsItems.some(item => pathname === item.href)
+                        ? "text-sidebar-primary-foreground border-white"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileBarChart className={iconClass} />
+                      <span>TDS</span>
+                    </div>
+                    {tdsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent className="mt-1 space-y-1">
+                    {tdsItems.map((item) => (
                       <a
                         key={item.href}
                         href={item.href}

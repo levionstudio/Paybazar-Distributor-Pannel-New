@@ -26,6 +26,8 @@ import DistributorRevertRequest from "./pages/DistributorRevertRequest";
 import DistributorRevertHistory from "./pages/DistributorRevertHistory";
 import Profile from "./pages/Profile";
 import MasterDistributorProfile from "./pages/ProfileMd";
+import MDTDSCommissionPage from "./pages/TdsMd";
+import DistributorTDSCommissionPage from "./pages/TdsDistributor";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,8 @@ const App = () => (
           <Route path="/distributor/revert/history" element={<DistributorRevertHistory />} />
          <Route path="/profile" element={<MasterDistributorProfile />} />
           <Route path="/profilee" element={<Profile />} />
+          <Route path ="/md/tds/history" element={<MDTDSCommissionPage />} />
+          <Route path ="/distributor/tds/history" element={<DistributorTDSCommissionPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -66,20 +66,20 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
 
   /* -------------------- BANK DETAILS -------------------- */
 
-  const companyBankDetails = [
-    {
-      bankName: "AXIS BANK",
-      accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-      accountNumber: "925020043148912",
-      ifscCode: "UTIB0000056",
-    },
-    {
-      bankName: "IDFC FIRST Bank",
-      accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-      accountNumber: "10248252306",
-      ifscCode: "IDFB0020137",
-    },
-  ];
+  // const companyBankDetails = [
+  //   {
+  //     bankName: "AXIS BANK",
+  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
+  //     accountNumber: "925020043148912",
+  //     ifscCode: "UTIB0000056",
+  //   },
+  //   {
+  //     bankName: "IDFC FIRST Bank",
+  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
+  //     accountNumber: "10248252306",
+  //     ifscCode: "IDFB0020137",
+  //   },
+  // ];
 
   const copyToClipboard = (text: string, field: string, bankIndex: number) => {
     navigator.clipboard.writeText(text);
@@ -300,7 +300,7 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
       <div className="flex-1 bg-muted/10">
         <main className="flex flex-col items-center p-6">
           {/* Bank Details Section */}
-          <div className="mb-6 flex w-full max-w-3xl flex-col">
+          {/* <div className="mb-6 flex w-full max-w-3xl flex-col">
             <Card className="overflow-hidden rounded-xl border-2 border-primary/20 shadow-lg">
               <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -399,7 +399,7 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </div> */}
 
           {/* Fund Request Form */}
           <div className="flex w-full max-w-3xl flex-col">

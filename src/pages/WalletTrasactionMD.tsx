@@ -656,9 +656,7 @@ export default function MdTransactions() {
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Transaction ID
                         </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Reference ID
-                        </TableHead>
+                       
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Type
                         </TableHead>
@@ -697,9 +695,9 @@ export default function MdTransactions() {
                           <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
                             #{txn.wallet_transaction_id}
                           </TableCell>
-                          <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
+                          {/* <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
                             {txn.reference_id || "N/A"}
-                          </TableCell>
+                          </TableCell> */}
                           <TableCell className="py-3 text-center">
                             <Badge
                               className={

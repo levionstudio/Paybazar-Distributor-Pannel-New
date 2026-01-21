@@ -385,7 +385,7 @@ export default function DistributorProfile() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/distributor")}
               className="text-white hover:bg-white/20"
             >
               <ArrowLeft className="h-5 w-5" />
