@@ -33,37 +33,61 @@ interface DecodedToken {
   iat: number;
 }
 
+interface AdminBank {
+  admin_bank_id: number;
+  bank_name: string;
+  account_number: string;
+  ifsc_code: string;
+}
+
+
 const RequestFundsDistributor = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    bank_name: "",
-    request_date: "",
-    utr_number: "",
-    amount: "",
-    remarks: "",
-  });
+const [formData, setFormData] = useState({
+  bank_name: "",
+  request_date: "",
+  utr_number: "",
+  amount: "",
+  remarks: "",
+});
 
   const [loading, setLoading] = useState(false);
   const [tokenData, setTokenData] = useState<DecodedToken | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-    const [banks, setBanks] = useState<any[]>([])
+const [banks, setBanks] = useState<AdminBank[]>([]);
   
-      useEffect(() => {
-        const fetchBanks = async () => {
-          const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/bank/get/all`,{
-            headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
-          })
-          console.log("Banks:", res.data.data.banks)
-          if (res.data.status === "success") {
-            setBanks(res.data.data.banks)
-          }
+    useEffect(() => {
+  const fetchBanks = async () => {
+    try {
+      if (!tokenData?.admin_id) return;
+
+      const token = localStorage.getItem("authToken");
+
+      const res = await axios.get(
+        `${import.meta.env.VITE_API_BASE_URL}/bank/get/admin/${tokenData.admin_id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-        fetchBanks()
-      },[])
+      );
+
+      console.log("Banks API response:", res.data);
+
+      if (res.data.status === "success") {
+        setBanks(res.data.data.admin_banks); // 👈 NOT .banks
+      }
+    } catch (err) {
+      console.error("Bank fetch failed:", err);
+      setBanks([]);
+    }
+  };
+
+  fetchBanks();
+}, [tokenData?.admin_id]);
+
     
 
   // Bank details for fund transfer
@@ -536,37 +560,33 @@ const RequestFundsDistributor = () => {
                     >
                       Bank Name <span className="text-destructive">*</span>
                     </Label>
-                    <Select
-                      value={formData.bank_name}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({ ...prev, bank_name: value }))
-                      }
-                      required
-                    >
-                      <SelectTrigger className="h-12 border-2 border-border bg-background transition-colors focus:border-primary">
-                        <SelectValue placeholder="Select Bank" />
-                      </SelectTrigger>
-                      <SelectContent>
-                      {
-                           banks.map((bank) => (
-                             <SelectItem
-                               key={bank.bank_name}
-                               value={bank.bank_name}
-                             >
-                               <div className="flex flex-col">
-                                 <div className="flex items-center gap-2">
-                                   <Building2 className="h-4 w-4" />
-                                   <span className="font-medium">{bank.bank_name}</span>
-                                 </div>
-                                 <span className="text-xs text-muted-foreground">
-                                   {bank.bank_address}
-                                 </span>
-                               </div>
-                             </SelectItem>
-                           ))
-                         }
-                      </SelectContent>
-                    </Select>
+                 <Select
+  value={formData.bank_name}
+  onValueChange={(value) =>
+    setFormData((prev) => ({ ...prev, bank_name: value }))
+  }
+>
+  <SelectTrigger>
+    <SelectValue placeholder="Select Bank" />
+  </SelectTrigger>
+
+  <SelectContent>
+    {banks.map((bank) => (
+      <SelectItem
+        key={bank.admin_bank_id}
+        value={bank.bank_name}
+      >
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{bank.bank_name}</span>
+          <span className="text-xs text-muted-foreground">
+            ({bank.ifsc_code})
+          </span>
+        </div>
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
                   </div>
 
                   {/* Request Date */}
