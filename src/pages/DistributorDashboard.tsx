@@ -25,22 +25,27 @@ import {
 import * as XLSX from "xlsx";
 
 interface Retailer {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  status: "active" | "inactive";
-  userwalletbalance: number;
-  createdAt: string;
+  retailer_id: string;
+  retailer_name: string;
+  retailer_email: string;
+  retailer_phone: string;
+  wallet_balance: number;
+  is_blocked: boolean;
+  kyc_status: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface DecodedToken {
-  data: {
-    distributor_id?: string;
-    distributor_name?: string;
-  };
+  admin_id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
   exp: number;
+  iat: number;
 }
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const DistributorDashboard = () => {
   const [retailers, setRetailers] = useState<Retailer[]>([]);
@@ -59,6 +64,7 @@ const DistributorDashboard = () => {
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (!token) {
+      console.error("❌ Authentication token not found");
       setError("Authentication token not found.");
       setLoading(false);
       return;
@@ -66,18 +72,25 @@ const DistributorDashboard = () => {
 
     try {
       const decoded: DecodedToken = jwtDecode(token);
-      const id = decoded?.data?.distributor_id;
-      const name = decoded?.data?.distributor_name;
+      console.log("📦 Decoded token:", decoded);
+      
+      const id = decoded?.user_id; // user_id is the distributor_id
+      const name = decoded?.user_name; // user_name is the distributor_name
 
       if (!id) {
+        console.error("❌ Distributor ID missing in token");
         setError("Distributor ID missing in token.");
         setLoading(false);
         return;
       }
 
+      console.log("✅ Distributor ID:", id);
+      console.log("✅ Distributor Name:", name);
+
       setDistributorId(id);
       setDistributorName(name || "Distributor");
-    } catch {
+    } catch (err) {
+      console.error("❌ Token decode error:", err);
       setError("Failed to decode token.");
       setLoading(false);
     }
@@ -85,67 +98,90 @@ const DistributorDashboard = () => {
 
   // Fetch retailers + wallet
   const fetchData = async () => {
-    if (!distributorId) return;
+    if (!distributorId) {
+      console.warn("⚠️ Distributor ID not available yet");
+      return;
+    }
     
     setLoading(true);
 
     const token = localStorage.getItem("authToken");
     if (!token) {
+      console.error("❌ Authentication token missing");
       setError("Authentication token missing.");
       setLoading(false);
       return;
     }
 
-    try {
-      // Retailer fetch
-      const res = await axios.get(
-        `https://server.paybazaar.in/admin/get/users/${distributorId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    console.log("🔄 Fetching data for Distributor:", distributorId);
 
-      let data = res.data?.data;
+    try {
+      // Fetch retailers using correct endpoint
+      const retailerEndpoint = `${API_BASE_URL}/retailer/get/distributor/${distributorId}`;
+      console.log("📡 Retailers endpoint:", retailerEndpoint);
+      
+      const res = await axios.get(retailerEndpoint, {
+        headers: { 
+          Authorization: `Bearer ${token}` 
+        }
+      });
+
+      console.log("📦 Retailers response:", res.data);
 
       if (res.data.status === "success") {
+        let data = res.data?.data;
+        
+        // Handle different response structures
+        let retailersList: Retailer[] = [];
+        
         if (Array.isArray(data)) {
-          const mapped: Retailer[] = data.map((r: any) => ({
-            id: r.user_unique_id ?? "",
-            name: r.user_name ?? "N/A",
-            email: r.user_email ?? "N/A",
-            phone: r.user_phone ?? "N/A",
-            status: "active",
-            userwalletbalance: parseFloat(r.user_wallet_balance) || 0,
-            createdAt: new Date().toISOString(),
-          }));
-          setRetailers(mapped);
-          setFilteredRetailers(mapped);
-          setError(null);
-        } else {
-          setRetailers([]);
-          setFilteredRetailers([]);
-          setError(null);
+          retailersList = data;
+        } else if (data?.retailers && Array.isArray(data.retailers)) {
+          retailersList = data.retailers;
         }
+
+        console.log(`✅ Found ${retailersList.length} retailers`);
+        setRetailers(retailersList);
+        setFilteredRetailers(retailersList);
+        setError(null);
       } else {
+        console.error("❌ Failed to load retailers:", res.data);
         setRetailers([]);
         setFilteredRetailers([]);
-        setError(res.data.msg || "Failed to load retailers.");
+        setError(res.data.message || "Failed to load retailers.");
       }
 
-      // Wallet balance fetch
-      const walletRes = await axios.get(
-        `https://server.paybazaar.in/distributor/wallet/get/balance/${distributorId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // Fetch wallet balance using correct endpoint
+      const walletEndpoint = `${API_BASE_URL}/wallet/get/balance/distributor/${distributorId}`;
+      console.log("💰 Wallet endpoint:", walletEndpoint);
+      
+      const walletRes = await axios.get(walletEndpoint, {
+        headers: { 
+          Authorization: `Bearer ${token}` 
+        }
+      });
 
-      const wData = walletRes.data?.data?.balance;
+      console.log("💵 Wallet response:", walletRes.data);
 
-      if (walletRes.data.status === "success" && wData !== undefined) {
-        setWalletBalance(Number(wData));
+      if (walletRes.data.status === "success") {
+        const balance = walletRes.data?.data?.balance ?? 
+                       walletRes.data?.data?.wallet_balance ?? 
+                       0;
+        console.log("✅ Wallet balance:", balance);
+        setWalletBalance(Number(balance));
       } else {
+        console.warn("⚠️ Wallet balance not found in response");
         setWalletBalance(0);
       }
     } catch (err: any) {
-      console.error(err);
-      setError("No data found.");
+      console.error("❌ Fetch error:", err);
+      console.error("Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+      
+      setError(err.response?.data?.message || "Failed to load data");
       setRetailers([]);
       setFilteredRetailers([]);
       setWalletBalance(0);
@@ -169,10 +205,10 @@ const DistributorDashboard = () => {
     const searchLower = searchTerm.toLowerCase().trim();
     const filtered = retailers.filter((retailer) => {
       const searchableFields = [
-        retailer.id,
-        retailer.name,
-        retailer.email,
-        retailer.phone,
+        retailer.retailer_id,
+        retailer.retailer_name,
+        retailer.retailer_email,
+        retailer.retailer_phone,
       ];
 
       return searchableFields.some((field) =>
@@ -186,16 +222,16 @@ const DistributorDashboard = () => {
 
   // Stats
   const totalRetailers = retailers.length;
-  const activeRetailers = retailers.filter((r) => r.status === "active").length;
+  const activeRetailers = retailers.filter((r) => !r.is_blocked).length;
   const totalBalance = retailers.reduce(
-    (sum, r) => sum + r.userwalletbalance,
+    (sum, r) => sum + (r.wallet_balance || 0),
     0
   );
   const avgBalance = totalRetailers > 0 ? totalBalance / totalRetailers : 0;
 
   // Top retailers by balance
   const topRetailers = [...retailers]
-    .sort((a, b) => b.userwalletbalance - a.userwalletbalance)
+    .sort((a, b) => (b.wallet_balance || 0) - (a.wallet_balance || 0))
     .slice(0, 5);
 
   // Pagination
@@ -209,12 +245,13 @@ const DistributorDashboard = () => {
     try {
       const exportData = filteredRetailers.map((retailer, index) => ({
         "S.No": index + 1,
-        "Retailer ID": retailer.id,
-        "Name": retailer.name,
-        "Email": retailer.email,
-        "Phone": retailer.phone,
-        "Wallet Balance (₹)": retailer.userwalletbalance.toFixed(2),
-        "Status": "Active",
+        "Retailer ID": retailer.retailer_id,
+        "Name": retailer.retailer_name,
+        "Email": retailer.retailer_email,
+        "Phone": retailer.retailer_phone,
+        "Wallet Balance (₹)": (retailer.wallet_balance || 0).toFixed(2),
+        "KYC Status": retailer.kyc_status ? "Verified" : "Pending",
+        "Status": retailer.is_blocked ? "Blocked" : "Active",
       }));
 
       // Add summary row
@@ -225,6 +262,7 @@ const DistributorDashboard = () => {
         "Email": "",
         "Phone": "TOTAL:",
         "Wallet Balance (₹)": totalBalance.toFixed(2),
+        "KYC Status": "",
         "Status": "",
       };
 
@@ -240,6 +278,7 @@ const DistributorDashboard = () => {
         { wch: 30 },
         { wch: 15 },
         { wch: 20 },
+        { wch: 12 },
         { wch: 10 },
       ];
       worksheet["!cols"] = columnWidths;
@@ -345,7 +384,7 @@ const DistributorDashboard = () => {
                   <div className="space-y-4">
                     {topRetailers.map((retailer, index) => (
                       <div
-                        key={retailer.id}
+                        key={retailer.retailer_id}
                         className="flex items-center justify-between pb-3 border-b border-border last:border-0"
                       >
                         <div className="flex items-center gap-3">
@@ -354,17 +393,17 @@ const DistributorDashboard = () => {
                           </div>
                           <div>
                             <p className="font-medium text-sm">
-                              {retailer.name}
+                              {retailer.retailer_name}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono">
-                              {retailer.id}
+                              {retailer.retailer_id}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-green-600 text-sm">
                             ₹
-                            {retailer.userwalletbalance.toLocaleString("en-IN", {
+                            {(retailer.wallet_balance || 0).toLocaleString("en-IN", {
                               minimumFractionDigits: 2,
                             })}
                           </p>
@@ -408,7 +447,7 @@ const DistributorDashboard = () => {
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-green-50 border border-green-100">
+                    {/* <div className="p-4 rounded-lg bg-green-50 border border-green-100">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-green-900">
                           Fund Distribution
@@ -423,7 +462,7 @@ const DistributorDashboard = () => {
                       <p className="text-xs text-green-700 mt-1">
                         Of Total Balance
                       </p>
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Quick Stats */}
@@ -435,7 +474,7 @@ const DistributorDashboard = () => {
                       <span className="font-bold">
                         ₹
                         {topRetailers.length > 0
-                          ? topRetailers[0].userwalletbalance.toLocaleString(
+                          ? (topRetailers[0].wallet_balance || 0).toLocaleString(
                               "en-IN"
                             )
                           : "0"}
@@ -448,11 +487,11 @@ const DistributorDashboard = () => {
                       <span className="font-bold">
                         ₹
                         {retailers.length > 0
-                          ? [...retailers]
-                              .sort(
-                                (a, b) => a.userwalletbalance - b.userwalletbalance
-                              )[0]
-                              .userwalletbalance.toLocaleString("en-IN")
+                          ? (
+                              [...retailers].sort(
+                                (a, b) => (a.wallet_balance || 0) - (b.wallet_balance || 0)
+                              )[0].wallet_balance || 0
+                            ).toLocaleString("en-IN")
                           : "0"}
                       </span>
                     </div>
@@ -464,7 +503,7 @@ const DistributorDashboard = () => {
                         {totalRetailers} Users
                       </span>
                     </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10">
+                    {/* <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10">
                       <span className="text-sm font-medium text-primary">
                         Available to Distribute
                       </span>
@@ -477,7 +516,7 @@ const DistributorDashboard = () => {
                           }
                         )}
                       </span>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </CardContent>
@@ -614,26 +653,26 @@ const DistributorDashboard = () => {
                     <TableBody>
                       {paginatedRetailers.map((retailer, index) => (
                         <TableRow
-                          key={retailer.id}
+                          key={retailer.retailer_id}
                           className={`${
                             index % 2 === 0 ? "bg-background" : "bg-muted/20"
                           } hover:bg-muted/50 transition-colors`}
                         >
                           <TableCell className="text-center font-mono text-sm py-4">
-                            {retailer.id}
+                            {retailer.retailer_id}
                           </TableCell>
                           <TableCell className="text-center font-medium py-4">
-                            {retailer.name}
+                            {retailer.retailer_name}
                           </TableCell>
                           <TableCell className="text-center text-sm py-4">
-                            {retailer.email}
+                            {retailer.retailer_email}
                           </TableCell>
                           <TableCell className="text-center font-mono py-4">
-                            {retailer.phone}
+                            {retailer.retailer_phone}
                           </TableCell>
                           <TableCell className="text-center font-semibold py-4">
                             ₹
-                            {retailer.userwalletbalance.toLocaleString(
+                            {(retailer.wallet_balance || 0).toLocaleString(
                               "en-IN",
                               {
                                 minimumFractionDigits: 2,
@@ -642,8 +681,8 @@ const DistributorDashboard = () => {
                             )}
                           </TableCell>
                           <TableCell className="text-center py-4">
-                            <Badge className="bg-green-50 text-green-700 border-green-200">
-                              Active
+                            <Badge className={retailer.is_blocked ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}>
+                              {retailer.is_blocked ? "Blocked" : "Active"}
                             </Badge>
                           </TableCell>
                         </TableRow>

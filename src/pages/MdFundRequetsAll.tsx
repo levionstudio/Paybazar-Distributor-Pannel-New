@@ -70,13 +70,6 @@ interface DecodedToken {
   iat: number;
 }
 
-interface PaginationInfo {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
 // Helper function to get today's date in YYYY-MM-DD format
 const getTodayDate = () => {
   const today = new Date();
@@ -88,8 +81,8 @@ const getTodayDate = () => {
 
 export default function MasterDistributorFundRequests() {
   const navigate = useNavigate();
-  const [requests, setRequests] = useState<FundRequest[]>([]);
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [allRequests, setAllRequests] = useState<FundRequest[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<FundRequest[]>([]);
   const [distributorId, setDistributorId] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -98,22 +91,12 @@ export default function MasterDistributorFundRequests() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
   // Filter states - Initialize with today's date
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [startDate, setStartDate] = useState(getTodayDate());
   const [endDate, setEndDate] = useState(getTodayDate());
-
-  // Applied filters (only update on Apply button click)
-  const [appliedFilters, setAppliedFilters] = useState({
-    searchTerm: "",
-    statusFilter: "ALL",
-    startDate: getTodayDate(),
-    endDate: getTodayDate(),
-  });
 
   // ✅ Decode token and get master distributor user_id
   useEffect(() => {
@@ -137,22 +120,60 @@ export default function MasterDistributorFundRequests() {
       }
 
       // ✅ MASTER DISTRIBUTOR ID = user_id from token
-      console.log("Decoded Token:", decoded);
-      console.log("Master Distributor ID (user_id):", decoded.user_id);
+      console.log("📦 Decoded Token:", decoded);
+      console.log("✅ Master Distributor ID (user_id):", decoded.user_id);
       setDistributorId(decoded.user_id);
     } catch (err) {
-      console.error("Failed to decode token.", err);
+      console.error("❌ Failed to decode token.", err);
       setError("Invalid session. Please login again.");
-    } finally {
       setLoading(false);
     }
   }, []);
 
-  // Fetch data when distributorId, pagination, or applied filters change
+  // Fetch data when distributorId is available
   useEffect(() => {
     if (!distributorId) return;
     fetchData();
-  }, [distributorId, currentPage, recordsPerPage, appliedFilters]);
+  }, [distributorId]);
+
+  // ✅ Frontend filtering - same as transaction pages
+  useEffect(() => {
+    let filtered = [...allRequests];
+
+    // ✅ FRONTEND DATE FILTER
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      filtered = filtered.filter((req) => {
+        const reqDate = new Date(req.request_date || req.created_at);
+        return reqDate >= start && reqDate <= end;
+      });
+    }
+
+    // Status filter
+    if (statusFilter !== "ALL") {
+      filtered = filtered.filter(
+        (req) => req.request_status.toUpperCase() === statusFilter.toUpperCase()
+      );
+    }
+
+    // Search
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      filtered = filtered.filter((req) =>
+        Object.values(req).some((v) =>
+          String(v).toLowerCase().includes(q)
+        )
+      );
+    }
+
+    setFilteredRequests(filtered);
+    setCurrentPage(1);
+  }, [allRequests, startDate, endDate, statusFilter, searchTerm]);
 
   const getRequestTypeBadge = (type: string) => {
     switch (type?.toUpperCase()) {
@@ -191,36 +212,11 @@ export default function MasterDistributorFundRequests() {
     }
 
     try {
-      const offset = (currentPage - 1) * recordsPerPage;
-
-      // ✅ Build request body (matches Go model)
+      // ✅ Build request body WITHOUT date filters (fetch all)
       const payload: any = {
         id: distributorId,
-        limit: recordsPerPage,
-        offset,
       };
 
-      if (appliedFilters.startDate) {
-        payload.start_date = new Date(
-          `${appliedFilters.startDate}T00:00:00`
-        ).toISOString();
-      }
-
-      if (appliedFilters.endDate) {
-        payload.end_date = new Date(
-          `${appliedFilters.endDate}T23:59:59`
-        ).toISOString();
-      }
-
-      if (appliedFilters.statusFilter !== "ALL") {
-        payload.status = appliedFilters.statusFilter;
-      }
-
-      if (appliedFilters.searchTerm.trim()) {
-        payload.search = appliedFilters.searchTerm.trim();
-      }
-
-      // 🔥 Debug
       console.log("🚀 FUND REQUEST PAYLOAD:", payload);
 
       const res = await axios.post(
@@ -243,14 +239,17 @@ export default function MasterDistributorFundRequests() {
       const fundRequests: FundRequest[] =
         res.data?.data?.fund_requests ?? [];
 
-      setRequests(fundRequests);
+      // Sort by created_at descending (newest first)
+      fundRequests.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.request_date).getTime();
+        const dateB = new Date(b.created_at || b.request_date).getTime();
+        return dateB - dateA;
+      });
 
-      setTotalRecords(res.data?.data?.total ?? fundRequests.length);
-      setTotalPages(
-        Math.ceil(
-          (res.data?.data?.total ?? fundRequests.length) / recordsPerPage
-        )
-      );
+      setAllRequests(fundRequests);
+      setFilteredRequests(fundRequests);
+
+      console.log(`✅ Fund requests set: ${fundRequests.length}`);
 
       if (fundRequests.length === 0) {
         setError("No fund requests found.");
@@ -259,9 +258,8 @@ export default function MasterDistributorFundRequests() {
       console.error("❌ FETCH FUND REQUEST ERROR:", err);
       console.error("📦 BACKEND ERROR:", err?.response?.data);
 
-      setRequests([]);
-      setTotalRecords(0);
-      setTotalPages(0);
+      setAllRequests([]);
+      setFilteredRequests([]);
 
       setError(
         err?.response?.data?.message ||
@@ -272,17 +270,6 @@ export default function MasterDistributorFundRequests() {
     }
   };
 
-  // Apply filters (triggers API call)
-  const applyFilters = () => {
-    setAppliedFilters({
-      searchTerm,
-      statusFilter,
-      startDate,
-      endDate,
-    });
-    setCurrentPage(1); // Reset to first page when filters change
-  };
-
   // Clear all filters
   const clearFilters = () => {
     const today = getTodayDate();
@@ -290,12 +277,6 @@ export default function MasterDistributorFundRequests() {
     setStatusFilter("ALL");
     setStartDate(today);
     setEndDate(today);
-    setAppliedFilters({
-      searchTerm: "",
-      statusFilter: "ALL",
-      startDate: today,
-      endDate: today,
-    });
     setCurrentPage(1);
   };
 
@@ -313,9 +294,12 @@ export default function MasterDistributorFundRequests() {
     }
   };
 
-  // Calculate display indices
-  const indexOfFirstRecord = (currentPage - 1) * recordsPerPage;
-  const indexOfLastRecord = Math.min(indexOfFirstRecord + recordsPerPage, totalRecords);
+  // Calculate pagination
+  const totalRecords = filteredRequests.length;
+  const totalPages = Math.ceil(totalRecords / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentRecords = filteredRequests.slice(indexOfFirstRecord, indexOfLastRecord);
 
   // Get status badge color
   const getStatusBadge = (status: string) => {
@@ -367,26 +351,15 @@ export default function MasterDistributorFundRequests() {
                     Filters
                   </div>
                 </CardTitle>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={clearFilters}
-                    variant="ghost"
-                    size="sm"
-                    className="text-white hover:bg-white/20"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Clear
-                  </Button>
-                  <Button
-                    onClick={applyFilters}
-                    variant="ghost"
-                    size="sm"
-                    className="bg-white/10 text-white hover:bg-white/20"
-                  >
-                    <Filter className="mr-2 h-4 w-4" />
-                    Apply
-                  </Button>
-                </div>
+                <Button
+                  onClick={clearFilters}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/20"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear All
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="p-6">
@@ -447,11 +420,6 @@ export default function MasterDistributorFundRequests() {
                     placeholder="Search by ID, bank, UTR..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        applyFilters();
-                      }
-                    }}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -521,7 +489,7 @@ export default function MasterDistributorFundRequests() {
                   </div>
                   <div className="text-sm text-slate-700">
                     Showing {totalRecords > 0 ? indexOfFirstRecord + 1 : 0} to{" "}
-                    {indexOfLastRecord} of {totalRecords} entries
+                    {Math.min(indexOfLastRecord, totalRecords)} of {totalRecords} entries
                   </div>
                 </div>
               </div>
@@ -544,7 +512,7 @@ export default function MasterDistributorFundRequests() {
                       {error}
                     </p>
                   </div>
-                ) : requests.length === 0 ? (
+                ) : currentRecords.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20">
                     <div className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-full bg-muted">
                       <FileText className="h-10 w-10 text-muted-foreground" />
@@ -553,7 +521,9 @@ export default function MasterDistributorFundRequests() {
                       No fund requests found
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Try adjusting your filters or search terms
+                      {searchTerm || statusFilter !== "ALL"
+                        ? "Try adjusting your filters or search terms"
+                        : "No fund requests available for the selected date range"}
                     </p>
                   </div>
                 ) : (
@@ -597,7 +567,7 @@ export default function MasterDistributorFundRequests() {
                     </TableHeader>
 
                     <TableBody>
-                      {requests.map((req, idx) => (
+                      {currentRecords.map((req, idx) => (
                         <TableRow
                           key={req.fund_request_id}
                           className={`${

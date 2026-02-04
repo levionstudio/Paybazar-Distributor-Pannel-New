@@ -68,27 +68,21 @@ interface DecodedToken {
   iat: number;
 }
 
-interface PaginationInfo {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export default function MdTransactions() {
   const navigate = useNavigate();
   const [walletBalance, setWalletBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [masterDistributorId, setMasterDistributorId] = useState<string>("");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
-  // Helper function to get today's date
+  // Helper function to get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
     const today = new Date();
     return today.toISOString().split("T")[0];
@@ -101,15 +95,6 @@ export default function MdTransactions() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [reasonFilter, setReasonFilter] = useState("ALL");
 
-  // Applied filters (only update on search/filter action)
-  const [appliedFilters, setAppliedFilters] = useState({
-    startDate: getTodayDate(),
-    endDate: getTodayDate(),
-    searchTerm: "",
-    typeFilter: "ALL",
-    reasonFilter: "ALL",
-  });
-
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (!token) {
@@ -119,13 +104,13 @@ export default function MdTransactions() {
 
     try {
       const decoded: DecodedToken = jwtDecode(token);
-      console.log("Decoded Token:", decoded);
+      console.log("📦 Decoded Token:", decoded);
       
       const mdId = decoded?.user_id;
-      console.log("Master Distributor ID:", mdId);
+      console.log("✅ Master Distributor ID:", mdId);
       
       if (!mdId) {
-        console.error("Master Distributor ID not found in token");
+        console.error("❌ Master Distributor ID not found in token");
         setLoading(false);
         return;
       }
@@ -133,12 +118,12 @@ export default function MdTransactions() {
       setMasterDistributorId(mdId);
       fetchWalletBalance(token, mdId);
     } catch (err) {
-      console.error("Token decode error", err);
+      console.error("❌ Token decode error", err);
       setLoading(false);
     }
   }, []);
 
-  // Fetch transactions when pagination or applied filters change
+  // Fetch transactions when masterDistributorId is available or date filters change
   useEffect(() => {
     if (masterDistributorId) {
       const token = localStorage.getItem("authToken");
@@ -146,19 +131,68 @@ export default function MdTransactions() {
         fetchTransactions(token, masterDistributorId);
       }
     }
-  }, [masterDistributorId, currentPage, recordsPerPage, appliedFilters]);
+  }, [masterDistributorId]);
+
+useEffect(() => {
+  let filtered = [...transactions];
+
+  // ✅ FRONTEND DATE FILTER
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    filtered = filtered.filter((txn) => {
+      const txnDate = new Date(txn.created_at);
+      return txnDate >= start && txnDate <= end;
+    });
+  }
+
+  // Type filter
+  if (typeFilter !== "ALL") {
+    filtered = filtered.filter((txn) =>
+      txn.credit_amount > 0 ? typeFilter === "CREDIT" : typeFilter === "DEBIT"
+    );
+  }
+
+  // Reason filter
+  if (reasonFilter !== "ALL") {
+    filtered = filtered.filter(
+      (txn) => txn.transaction_reason === reasonFilter
+    );
+  }
+
+  // Search
+  if (searchTerm.trim()) {
+    const q = searchTerm.toLowerCase();
+    filtered = filtered.filter((txn) =>
+      Object.values(txn).some((v) =>
+        String(v).toLowerCase().includes(q)
+      )
+    );
+  }
+
+  setFilteredTransactions(filtered);
+  setCurrentPage(1);
+}, [transactions, startDate, endDate, typeFilter, reasonFilter, searchTerm]);
+
 
   const fetchWalletBalance = async (token: string, id: string) => {
     try {
       const res = await axios.get(
-        import.meta.env.VITE_API_BASE_URL + `/md/wallet/get/balance/${id}`,
+        `${API_BASE_URL}/wallet/get/balance/md/${id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("Wallet Balance Response:", res.data);
-      const balance = res.data?.data?.balance;
+      console.log("💰 Wallet Balance Response:", res.data);
+      
+      const balance = res.data?.data?.balance ?? 
+                     res.data?.data?.wallet_balance ?? 
+                     0;
       setWalletBalance(balance ? Number(balance) : 0);
     } catch (err) {
-      console.error("Wallet balance fetch error:", err);
+      console.error("❌ Wallet balance fetch error:", err);
       setWalletBalance(0);
     }
   };
@@ -166,89 +200,67 @@ export default function MdTransactions() {
   const fetchTransactions = async (token: string, id: string) => {
     try {
       setLoading(true);
-      console.log("Fetching transactions for MD ID:", id);
+      console.log("🔄 Fetching transactions for MD ID:", id);
       
-      // Calculate offset
-      const offset = (currentPage - 1) * recordsPerPage;
-      
-      // Build query parameters
-      const params: any = {
-        limit: recordsPerPage,
-        offset: offset,
-      };
+      // Build query parameters with date range in YYYY-MM-DD format
+      const params: any = {};
 
-      // Add filters to params
-      if (appliedFilters.startDate) {
-        params.start_date = appliedFilters.startDate;
-      }
-      if (appliedFilters.endDate) {
-        params.end_date = appliedFilters.endDate;
-      }
-      if (appliedFilters.typeFilter !== "ALL") {
-        params.type = appliedFilters.typeFilter;
-      }
-      if (appliedFilters.reasonFilter !== "ALL") {
-        params.reason = appliedFilters.reasonFilter;
-      }
-      if (appliedFilters.searchTerm.trim()) {
-        params.search = appliedFilters.searchTerm.trim();
-      }
+  
 
-      console.log("API Request params:", params);
+      console.log("🌐 Full API URL:", `${API_BASE_URL}/wallet/get/transactions/md/${id}`);
       
       const res = await axios.get(
-        import.meta.env.VITE_API_BASE_URL + `/wallet/get/transactions/md/${id}`,
+        `${API_BASE_URL}/wallet/get/transactions/md/${id}`,
         { 
           headers: { Authorization: `Bearer ${token}` },
-          params: params
         }
       );
       
-      console.log("Transactions API Response:", res.data);
+      console.log("📦 Transactions API Response:", res.data);
       
-      if (res.data.status === "success" && res.data.data?.transactions) {
-        const txns = res.data.data.transactions;
+      if (res.data.status === "success") {
+        let txnData = res.data.data;
+        let txns: Transaction[] = [];
+        
+        // Handle different response structures
+        if (Array.isArray(txnData)) {
+          txns = txnData;
+        } else if (txnData?.transactions && Array.isArray(txnData.transactions)) {
+          txns = txnData.transactions;
+        } else if (txnData?.wallet_transactions && Array.isArray(txnData.wallet_transactions)) {
+          txns = txnData.wallet_transactions;
+        }
+        
+        console.log(`✅ Raw transactions fetched: ${txns.length}`);
+        
+        // Sort by created_at descending (newest first)
+        txns.sort((a, b) => {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return dateB - dateA;
+        });
+        
         setTransactions(txns);
+        setFilteredTransactions(txns);
         
-        // Set pagination info
-        const paginationInfo: PaginationInfo = res.data.data.pagination || {
-          total: txns.length,
-          page: currentPage,
-          limit: recordsPerPage,
-          totalPages: 1,
-        };
-        
-        setTotalRecords(paginationInfo.total);
-        setTotalPages(paginationInfo.totalPages);
-        
-        console.log("Transactions fetched:", txns.length);
-        console.log("Pagination info:", paginationInfo);
+        console.log(`✅ Transactions set: ${txns.length}`);
       } else {
-        console.log("No transactions found in response");
+        console.log("⚠️ No transactions found in response");
         setTransactions([]);
-        setTotalRecords(0);
-        setTotalPages(0);
+        setFilteredTransactions([]);
       }
-    } catch (err) {
-      console.error("Transactions fetch error:", err);
+    } catch (err: any) {
+      console.error("❌ Transactions fetch error:", err);
+      console.error("📋 Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       setTransactions([]);
-      setTotalRecords(0);
-      setTotalPages(0);
+      setFilteredTransactions([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Apply filters
-  const applyFilters = () => {
-    setAppliedFilters({
-      startDate,
-      endDate,
-      searchTerm,
-      typeFilter,
-      reasonFilter,
-    });
-    setCurrentPage(1); // Reset to first page when filters change
   };
 
   // Clear all filters
@@ -259,46 +271,13 @@ export default function MdTransactions() {
     setSearchTerm("");
     setTypeFilter("ALL");
     setReasonFilter("ALL");
-    setAppliedFilters({
-      startDate: today,
-      endDate: today,
-      searchTerm: "",
-      typeFilter: "ALL",
-      reasonFilter: "ALL",
-    });
     setCurrentPage(1);
   };
 
-  // Export to Excel (fetch all data for export)
+  // Export to Excel (export filtered data)
   const exportToExcel = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token || !masterDistributorId) return;
-
-      // Fetch all transactions for export
-      const params: any = {
-        limit: totalRecords || 10000, // Get all records
-        offset: 0,
-      };
-
-      // Add current filters
-      if (appliedFilters.startDate) params.start_date = appliedFilters.startDate;
-      if (appliedFilters.endDate) params.end_date = appliedFilters.endDate;
-      if (appliedFilters.typeFilter !== "ALL") params.type = appliedFilters.typeFilter;
-      if (appliedFilters.reasonFilter !== "ALL") params.reason = appliedFilters.reasonFilter;
-      if (appliedFilters.searchTerm.trim()) params.search = appliedFilters.searchTerm.trim();
-
-      const res = await axios.get(
-        import.meta.env.VITE_API_BASE_URL + `/wallet/get/transactions/md/${masterDistributorId}`,
-        { 
-          headers: { Authorization: `Bearer ${token}` },
-          params: params
-        }
-      );
-
-      const allTransactions = res.data.data?.transactions || [];
-
-      const exportData = allTransactions.map((txn: Transaction, index: number) => ({
+      const exportData = filteredTransactions.map((txn: Transaction, index: number) => ({
         "S.No": index + 1,
         "Date & Time": txn.created_at
           ? new Date(txn.created_at).toLocaleString("en-IN")
@@ -315,11 +294,11 @@ export default function MdTransactions() {
       }));
 
       // Add summary row
-      const totalCredit = allTransactions.reduce(
+      const totalCredit = filteredTransactions.reduce(
         (sum: number, txn: Transaction) => sum + parseFloat(txn.credit_amount?.toString() || "0"),
         0
       );
-      const totalDebit = allTransactions.reduce(
+      const totalDebit = filteredTransactions.reduce(
         (sum: number, txn: Transaction) => sum + parseFloat(txn.debit_amount?.toString() || "0"),
         0
       );
@@ -406,9 +385,12 @@ export default function MdTransactions() {
     return txn.credit_amount > 0 ? txn.credit_amount : (txn.debit_amount || 0);
   };
 
-  // Calculate display indices
-  const indexOfFirstRecord = (currentPage - 1) * recordsPerPage;
-  const indexOfLastRecord = Math.min(indexOfFirstRecord + recordsPerPage, totalRecords);
+  // Calculate pagination
+  const totalRecords = filteredTransactions.length;
+  const totalPages = Math.ceil(totalRecords / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentRecords = filteredTransactions.slice(indexOfFirstRecord, indexOfLastRecord);
 
   return (
     <DashboardLayout role="master">
@@ -532,25 +514,9 @@ export default function MdTransactions() {
                     placeholder="Search transactions..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        applyFilters();
-                      }
-                    }}
                     className="border-slate-300 bg-white"
                   />
                 </div>
-              </div>
-
-              {/* Apply Filters Button */}
-              <div className="mt-4 flex justify-end">
-                <Button
-                  onClick={applyFilters}
-                  className="paybazaar-gradient text-white"
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  Apply Filters
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -620,7 +586,7 @@ export default function MdTransactions() {
                   </div>
                   <div className="text-sm text-slate-700">
                     Showing {totalRecords > 0 ? indexOfFirstRecord + 1 : 0} to{" "}
-                    {indexOfLastRecord} of {totalRecords} entries
+                    {Math.min(indexOfLastRecord, totalRecords)} of {totalRecords} entries
                   </div>
                 </div>
               </div>
@@ -634,13 +600,15 @@ export default function MdTransactions() {
                       Loading transactions...
                     </p>
                   </div>
-                ) : transactions.length === 0 ? (
+                ) : currentRecords.length === 0 ? (
                   <div className="py-20 text-center">
                     <p className="mb-2 text-lg font-semibold">
                       No transactions found
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Try adjusting your filters or search terms
+                      {searchTerm || typeFilter !== "ALL" || reasonFilter !== "ALL"
+                        ? "Try adjusting your filters or search terms"
+                        : "No transactions available for the selected date range"}
                     </p>
                   </div>
                 ) : (
@@ -656,7 +624,6 @@ export default function MdTransactions() {
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Transaction ID
                         </TableHead>
-                       
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Type
                         </TableHead>
@@ -679,7 +646,7 @@ export default function MdTransactions() {
                     </TableHeader>
 
                     <TableBody>
-                      {transactions.map((txn, idx) => (
+                      {currentRecords.map((txn, idx) => (
                         <TableRow
                           key={txn.wallet_transaction_id}
                           className={`${
@@ -695,9 +662,6 @@ export default function MdTransactions() {
                           <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
                             #{txn.wallet_transaction_id}
                           </TableCell>
-                          {/* <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
-                            {txn.reference_id || "N/A"}
-                          </TableCell> */}
                           <TableCell className="py-3 text-center">
                             <Badge
                               className={

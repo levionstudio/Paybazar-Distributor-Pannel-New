@@ -68,53 +68,32 @@ interface DecodedToken {
   iat: number;
 }
 
-// Get today's date in YYYY-MM-DD format in local timezone
-const getTodayDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Date filtering helper - same as admin code
-const isTransactionInDateRange = (
-  transactionDate: string,
-  startDate: string,
-  endDate: string
-): boolean => {
-  const txDate = new Date(transactionDate);
-  const txDateOnly = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate());
-  
-  const start = new Date(startDate + "T00:00:00");
-  const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  
-  const end = new Date(endDate + "T23:59:59");
-  const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  
-  return txDateOnly >= startDateOnly && txDateOnly <= endDateOnly;
-};
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export default function DistributorTransactions() {
   const navigate = useNavigate();
+  const [walletBalance, setWalletBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [distributorId, setDistributorId] = useState<string>("");
-
-  const today = getTodayDate();
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
-  // Filter state
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
+
+  // Filter states
+  const [startDate, setStartDate] = useState(getTodayDate());
+  const [endDate, setEndDate] = useState(getTodayDate());
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [reasonFilter, setReasonFilter] = useState("ALL");
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -125,106 +104,155 @@ export default function DistributorTransactions() {
 
     try {
       const decoded: DecodedToken = jwtDecode(token);
-      console.log("Decoded Token:", decoded);
+      console.log("📦 Decoded Token:", decoded);
       
       const distId = decoded?.user_id;
-      console.log("Distributor ID:", distId);
+      console.log("✅ Distributor ID:", distId);
       
       if (!distId) {
-        console.error("Distributor ID not found in token");
+        console.error("❌ Distributor ID not found in token");
         setLoading(false);
         return;
       }
       
       setDistributorId(distId);
-
+      fetchWalletBalance(token, distId);
     } catch (err) {
-      console.error("Token decode error", err);
+      console.error("❌ Token decode error", err);
       setLoading(false);
     }
   }, []);
 
-  // Fetch transactions when filters change
+  // Fetch transactions when distributorId is available or date filters change
   useEffect(() => {
     if (distributorId) {
-      fetchTransactions();
+      const token = localStorage.getItem("authToken");
+      if (token) {
+        fetchTransactions(token, distributorId);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distributorId, currentPage, recordsPerPage, typeFilter, reasonFilter, searchTerm, startDate, endDate]);
+  }, [distributorId]);
 
-  const fetchTransactions = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token || !distributorId) return;
+  // Frontend filtering - same as master distributor
+  useEffect(() => {
+    let filtered = [...transactions];
 
-    setLoading(true);
+    // ✅ FRONTEND DATE FILTER
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
 
-    try {
-      const offset = (currentPage - 1) * recordsPerPage;
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
 
-      // Build query parameters - send dates WITHOUT time like admin code
-      const params = new URLSearchParams({
-        limit: recordsPerPage.toString(),
-        offset: offset.toString(),
+      filtered = filtered.filter((txn) => {
+        const txnDate = new Date(txn.created_at);
+        return txnDate >= start && txnDate <= end;
       });
+    }
 
-      // Add filters to params
-      if (typeFilter !== "ALL") {
-        params.append("type", typeFilter);
-      }
-      if (reasonFilter !== "ALL") {
-        params.append("reason", reasonFilter);
-      }
-      if (searchTerm.trim()) {
-        params.append("search", searchTerm.trim());
-      }
-      if (startDate) {
-        params.append("start_date", startDate); // Send as YYYY-MM-DD only
-      }
-      if (endDate) {
-        params.append("end_date", endDate); // Send as YYYY-MM-DD only
-      }
+    // Type filter
+    if (typeFilter !== "ALL") {
+      filtered = filtered.filter((txn) =>
+        txn.credit_amount > 0 ? typeFilter === "CREDIT" : typeFilter === "DEBIT"
+      );
+    }
 
-      console.log("Fetching transactions with params:", params.toString());
+    // Reason filter
+    if (reasonFilter !== "ALL") {
+      filtered = filtered.filter(
+        (txn) => txn.transaction_reason === reasonFilter
+      );
+    }
 
+    // Search
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      filtered = filtered.filter((txn) =>
+        Object.values(txn).some((v) =>
+          String(v).toLowerCase().includes(q)
+        )
+      );
+    }
+
+    setFilteredTransactions(filtered);
+    setCurrentPage(1);
+  }, [transactions, startDate, endDate, typeFilter, reasonFilter, searchTerm]);
+
+  const fetchWalletBalance = async (token: string, id: string) => {
+    try {
       const res = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/wallet/get/transactions/distributor/${distributorId}?${params.toString()}`,
-        {
+        `${API_BASE_URL}/wallet/get/balance/distributor/${id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      console.log("💰 Wallet Balance Response:", res.data);
+      
+      const balance = res.data?.data?.balance ?? 
+                     res.data?.data?.wallet_balance ?? 
+                     0;
+      setWalletBalance(balance ? Number(balance) : 0);
+    } catch (err) {
+      console.error("❌ Wallet balance fetch error:", err);
+      setWalletBalance(0);
+    }
+  };
+
+  const fetchTransactions = async (token: string, id: string) => {
+    try {
+      setLoading(true);
+      console.log("🔄 Fetching transactions for Distributor ID:", id);
+      
+      console.log("🌐 Full API URL:", `${API_BASE_URL}/wallet/get/transactions/distributor/${id}`);
+      
+      const res = await axios.get(
+        `${API_BASE_URL}/wallet/get/transactions/distributor/${id}`,
+        { 
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-
-      const raw: Transaction[] = res.data?.data?.transactions || [];
-      const total = res.data?.data?.pagination?.total || res.data?.data?.total_count || 0;
-
-      // Client-side date filtering for accuracy (same as admin code)
-      let filtered = raw;
       
-      if (startDate && endDate) {
-        filtered = raw.filter((tx) =>
-          isTransactionInDateRange(tx.created_at, startDate, endDate)
-        );
-        console.log(`Client-side date filter: ${raw.length} -> ${filtered.length}`);
+      console.log("📦 Transactions API Response:", res.data);
+      
+      if (res.data.status === "success") {
+        let txnData = res.data.data;
+        let txns: Transaction[] = [];
+        
+        // Handle different response structures
+        if (Array.isArray(txnData)) {
+          txns = txnData;
+        } else if (txnData?.transactions && Array.isArray(txnData.transactions)) {
+          txns = txnData.transactions;
+        } else if (txnData?.wallet_transactions && Array.isArray(txnData.wallet_transactions)) {
+          txns = txnData.wallet_transactions;
+        }
+        
+        console.log(`✅ Raw transactions fetched: ${txns.length}`);
+        
+        // Sort by created_at descending (newest first)
+        txns.sort((a, b) => {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return dateB - dateA;
+        });
+        
+        setTransactions(txns);
+        setFilteredTransactions(txns);
+        
+        console.log(`✅ Transactions set: ${txns.length}`);
+      } else {
+        console.log("⚠️ No transactions found in response");
+        setTransactions([]);
+        setFilteredTransactions([]);
       }
-
-   setTransactions(filtered);
-
-// 🔥 TOTAL MUST ALWAYS COME FROM BACKEND
-setTotalRecords(
-  res.data?.data?.pagination?.total ?? filtered.length
-);
-
-setTotalPages(
-  res.data?.data?.pagination?.totalPages ??
-    Math.ceil(
-      (res.data?.data?.pagination?.total ?? filtered.length) /
-        recordsPerPage
-    )
-);
-
-
-      console.log(`Loaded ${filtered.length} transactions, total: ${totalRecords}`);
-    } catch (error) {
-      console.error("Fetch error:", error);
+    } catch (err: any) {
+      console.error("❌ Transactions fetch error:", err);
+      console.error("📋 Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+      setTransactions([]);
+      setFilteredTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -241,58 +269,10 @@ setTotalPages(
     setCurrentPage(1);
   };
 
-  const hasActiveFilters =
-    searchTerm || 
-    typeFilter !== "ALL" || 
-    reasonFilter !== "ALL" ||
-    startDate !== today || 
-    endDate !== today;
-
-  // Export to Excel (fetch all data for export)
+  // Export to Excel (export filtered data)
   const exportToExcel = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token || !distributorId) return;
-
-      // Fetch ALL transactions without pagination for export
-      const params = new URLSearchParams({
-        limit: "999999",
-        offset: "0",
-      });
-
-      if (typeFilter !== "ALL") {
-        params.append("type", typeFilter);
-      }
-      if (reasonFilter !== "ALL") {
-        params.append("reason", reasonFilter);
-      }
-      if (searchTerm.trim()) {
-        params.append("search", searchTerm.trim());
-      }
-      if (startDate) {
-        params.append("start_date", startDate); // Send as YYYY-MM-DD only
-      }
-      if (endDate) {
-        params.append("end_date", endDate); // Send as YYYY-MM-DD only
-      }
-
-      const res = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/wallet/get/transactions/distributor/${distributorId}?${params.toString()}`,
-        { 
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      let allTransactions: Transaction[] = res.data.data?.transactions || [];
-
-      // Apply client-side date filtering
-      if (startDate && endDate) {
-        allTransactions = allTransactions.filter((tx) =>
-          isTransactionInDateRange(tx.created_at, startDate, endDate)
-        );
-      }
-
-      const exportData = allTransactions.map((txn, index) => ({
+      const exportData = filteredTransactions.map((txn: Transaction, index: number) => ({
         "S.No": index + 1,
         "Date & Time": txn.created_at
           ? new Date(txn.created_at).toLocaleString("en-IN")
@@ -309,12 +289,12 @@ setTotalPages(
       }));
 
       // Add summary row
-      const totalCredit = allTransactions.reduce(
-        (sum, txn) => sum + parseFloat(txn.credit_amount?.toString() || "0"),
+      const totalCredit = filteredTransactions.reduce(
+        (sum: number, txn: Transaction) => sum + parseFloat(txn.credit_amount?.toString() || "0"),
         0
       );
-      const totalDebit = allTransactions.reduce(
-        (sum, txn) => sum + parseFloat(txn.debit_amount?.toString() || "0"),
+      const totalDebit = filteredTransactions.reduce(
+        (sum: number, txn: Transaction) => sum + parseFloat(txn.debit_amount?.toString() || "0"),
         0
       );
 
@@ -338,16 +318,24 @@ setTotalPages(
 
       // Set column widths
       const columnWidths = [
-        { wch: 8 }, { wch: 20 }, { wch: 20 }, { wch: 15 },
-        { wch: 10 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
-        { wch: 18 }, { wch: 20 }, { wch: 30 },
+        { wch: 8 }, // S.No
+        { wch: 20 }, // Date & Time
+        { wch: 20 }, // Transaction ID
+        { wch: 15 }, // Reference ID
+        { wch: 10 }, // Type
+        { wch: 18 }, // Credit Amount
+        { wch: 18 }, // Debit Amount
+        { wch: 18 }, // Before Balance
+        { wch: 18 }, // After Balance
+        { wch: 20 }, // Reason
+        { wch: 30 }, // Remarks
       ];
       worksheet["!cols"] = columnWidths;
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
 
-      const timestamp = getTodayDate();
+      const timestamp = new Date().toISOString().slice(0, 10);
       const filename = `Distributor_Wallet_Transactions_${timestamp}.xlsx`;
 
       XLSX.writeFile(workbook, filename);
@@ -359,7 +347,11 @@ setTotalPages(
 
   // Refresh transactions
   const handleRefresh = () => {
-    fetchTransactions();
+    const token = localStorage.getItem("authToken");
+    if (!token || !distributorId) return;
+
+    fetchTransactions(token, distributorId);
+    fetchWalletBalance(token, distributorId);
   };
 
   // Format date
@@ -388,9 +380,12 @@ setTotalPages(
     return txn.credit_amount > 0 ? txn.credit_amount : (txn.debit_amount || 0);
   };
 
-  // Calculate display indices
-  const indexOfFirstRecord = (currentPage - 1) * recordsPerPage;
-  const indexOfLastRecord = Math.min(indexOfFirstRecord + recordsPerPage, totalRecords);
+  // Calculate pagination
+  const totalRecords = filteredTransactions.length;
+  const totalPages = Math.ceil(totalRecords / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentRecords = filteredTransactions.slice(indexOfFirstRecord, indexOfLastRecord);
 
   return (
     <DashboardLayout role="distributor">
@@ -427,17 +422,15 @@ setTotalPages(
                     Filters
                   </div>
                 </CardTitle>
-                {hasActiveFilters && (
-                  <Button
-                    onClick={clearFilters}
-                    variant="ghost"
-                    size="sm"
-                    className="text-white hover:bg-white/20"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Clear All
-                  </Button>
-                )}
+                <Button
+                  onClick={clearFilters}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/20"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear All
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="p-6">
@@ -451,11 +444,7 @@ setTotalPages(
                   <Input
                     type="date"
                     value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    max={endDate || undefined}
+                    onChange={(e) => setStartDate(e.target.value)}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -469,11 +458,7 @@ setTotalPages(
                   <Input
                     type="date"
                     value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    min={startDate || undefined}
+                    onChange={(e) => setEndDate(e.target.value)}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -483,13 +468,7 @@ setTotalPages(
                   <Label className="text-sm font-semibold text-slate-700">
                     Type
                   </Label>
-                  <Select 
-                    value={typeFilter} 
-                    onValueChange={(value) => {
-                      setTypeFilter(value);
-                      setCurrentPage(1);
-                    }}
-                  >
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
                     <SelectTrigger className="border-slate-300 bg-white">
                       <SelectValue />
                     </SelectTrigger>
@@ -506,13 +485,7 @@ setTotalPages(
                   <Label className="text-sm font-semibold text-slate-700">
                     Reason
                   </Label>
-                  <Select 
-                    value={reasonFilter} 
-                    onValueChange={(value) => {
-                      setReasonFilter(value);
-                      setCurrentPage(1);
-                    }}
-                  >
+                  <Select value={reasonFilter} onValueChange={setReasonFilter}>
                     <SelectTrigger className="border-slate-300 bg-white">
                       <SelectValue />
                     </SelectTrigger>
@@ -535,10 +508,7 @@ setTotalPages(
                   <Input
                     placeholder="Search transactions..."
                     value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setCurrentPage(1);
-                    }}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -611,7 +581,7 @@ setTotalPages(
                   </div>
                   <div className="text-sm text-slate-700">
                     Showing {totalRecords > 0 ? indexOfFirstRecord + 1 : 0} to{" "}
-                    {indexOfLastRecord} of {totalRecords} entries
+                    {Math.min(indexOfLastRecord, totalRecords)} of {totalRecords} entries
                   </div>
                 </div>
               </div>
@@ -625,15 +595,15 @@ setTotalPages(
                       Loading transactions...
                     </p>
                   </div>
-                ) : transactions.length === 0 ? (
+                ) : currentRecords.length === 0 ? (
                   <div className="py-20 text-center">
                     <p className="mb-2 text-lg font-semibold">
                       No transactions found
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {hasActiveFilters
-                        ? "Try adjusting your filters"
-                        : "No transactions available"}
+                      {searchTerm || typeFilter !== "ALL" || reasonFilter !== "ALL"
+                        ? "Try adjusting your filters or search terms"
+                        : "No transactions available for the selected date range"}
                     </p>
                   </div>
                 ) : (
@@ -674,7 +644,7 @@ setTotalPages(
                     </TableHeader>
 
                     <TableBody>
-                      {transactions.map((txn, idx) => (
+                      {currentRecords.map((txn, idx) => (
                         <TableRow
                           key={txn.wallet_transaction_id}
                           className={`${

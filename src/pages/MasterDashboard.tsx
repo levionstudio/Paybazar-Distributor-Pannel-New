@@ -26,11 +26,15 @@ import {
 import * as XLSX from "xlsx";
 
 interface Distributor {
-  distributor_unique_id: string;
+  distributor_id: string;
   distributor_name: string;
   distributor_email: string;
   distributor_phone: string;
-  distributor_wallet_balance: string;
+  wallet_balance: number;
+  is_blocked: boolean;
+  kyc_status: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface DecodedToken {
@@ -41,6 +45,8 @@ interface DecodedToken {
   exp: number;
   iat: number;
 }
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const MasterDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
@@ -111,8 +117,8 @@ const MasterDashboard = () => {
     console.log("🔄 Fetching data for Master Distributor:", masterDistributorId);
 
     try {
-      // Fetch distributors
-      const distEndpoint = `${import.meta.env.VITE_API_BASE_URL}/admin/get/distributors/${masterDistributorId}`;
+      // Fetch distributors using correct endpoint
+      const distEndpoint = `${API_BASE_URL}/distributor/get/md/${masterDistributorId}`;
       console.log("📡 Distributors endpoint:", distEndpoint);
       
       const distRes = await axios.get(distEndpoint, {
@@ -123,28 +129,31 @@ const MasterDashboard = () => {
 
       console.log("📦 Distributors response:", distRes.data);
 
-      let data = distRes.data?.data;
-
       if (distRes.data.status === "success") {
+        let data = distRes.data?.data;
+        
+        // Handle different response structures
+        let distributorsList: Distributor[] = [];
+        
         if (Array.isArray(data)) {
-          console.log(`✅ Found ${data.length} distributors`);
-          setDistributors(data);
-          setFilteredDistributors(data);
-        } else {
-          console.warn("⚠️ Distributors data is not an array");
-          setDistributors([]);
-          setFilteredDistributors([]);
+          distributorsList = data;
+        } else if (data?.distributors && Array.isArray(data.distributors)) {
+          distributorsList = data.distributors;
         }
+
+        console.log(`✅ Found ${distributorsList.length} distributors`);
+        setDistributors(distributorsList);
+        setFilteredDistributors(distributorsList);
         setError("");
       } else {
         console.error("❌ Failed to load distributors:", distRes.data);
-        setError("Failed to load distributors");
+        setError(distRes.data.message || "Failed to load distributors");
         setDistributors([]);
         setFilteredDistributors([]);
       }
 
-      // Fetch wallet balance
-      const walletEndpoint = `${import.meta.env.VITE_API_BASE_URL}/wallet/get/balance/md/${masterDistributorId}`;
+      // Fetch wallet balance using correct endpoint
+      const walletEndpoint = `${API_BASE_URL}/wallet/get/balance/md/${masterDistributorId}`;
       console.log("💰 Wallet endpoint:", walletEndpoint);
       
       const walletRes = await axios.get(walletEndpoint, {
@@ -155,12 +164,12 @@ const MasterDashboard = () => {
 
       console.log("💵 Wallet response:", walletRes.data);
 
-      const wData = walletRes.data?.data?.wallet_balance;
-
-      if (walletRes.data.status === "success" && wData !== undefined) {
-        const balance = Number(wData);
+      if (walletRes.data.status === "success") {
+        const balance = walletRes.data?.data?.balance ?? 
+                       walletRes.data?.data?.wallet_balance ?? 
+                       0;
         console.log("✅ Wallet balance:", balance);
-        setWalletBalance(balance);
+        setWalletBalance(Number(balance));
       } else {
         console.warn("⚠️ Wallet balance not found in response");
         setWalletBalance(0);
@@ -197,7 +206,7 @@ const MasterDashboard = () => {
     const searchLower = searchTerm.toLowerCase().trim();
     const filtered = distributors.filter((dist) => {
       const searchableFields = [
-        dist.distributor_unique_id,
+        dist.distributor_id,
         dist.distributor_name,
         dist.distributor_email,
         dist.distributor_phone,
@@ -213,20 +222,18 @@ const MasterDashboard = () => {
   }, [searchTerm, distributors]);
 
   const totalDistribution = distributors.reduce(
-    (sum, d) => sum + parseFloat(d.distributor_wallet_balance || "0"),
+    (sum, d) => sum + (d.wallet_balance || 0),
     0
   );
 
-  const activeDistributors = distributors.length;
+  const activeDistributors = distributors.filter(d => !d.is_blocked).length;
   const avgBalance =
     activeDistributors > 0 ? totalDistribution / activeDistributors : 0;
 
   // Top distributors by balance
   const topDistributors = [...distributors]
     .sort(
-      (a, b) =>
-        parseFloat(b.distributor_wallet_balance || "0") -
-        parseFloat(a.distributor_wallet_balance || "0")
+      (a, b) => (b.wallet_balance || 0) - (a.wallet_balance || 0)
     )
     .slice(0, 5);
 
@@ -241,12 +248,13 @@ const MasterDashboard = () => {
     try {
       const exportData = filteredDistributors.map((dist, index) => ({
         "S.No": index + 1,
-        "Distributor ID": dist.distributor_unique_id,
+        "Distributor ID": dist.distributor_id,
         "Name": dist.distributor_name,
         "Email": dist.distributor_email,
         "Phone": dist.distributor_phone,
-        "Wallet Balance (₹)": parseFloat(dist.distributor_wallet_balance || "0").toFixed(2),
-        "Status": "Active"
+        "Wallet Balance (₹)": (dist.wallet_balance || 0).toFixed(2),
+        "KYC Status": dist.kyc_status ? "Verified" : "Pending",
+        "Status": dist.is_blocked ? "Blocked" : "Active"
       }));
 
       const summaryRow = {
@@ -256,6 +264,7 @@ const MasterDashboard = () => {
         "Email": "",
         "Phone": "TOTAL:",
         "Wallet Balance (₹)": totalDistribution.toFixed(2),
+        "KYC Status": "",
         "Status": ""
       };
 
@@ -269,6 +278,7 @@ const MasterDashboard = () => {
         { wch: 30 },
         { wch: 15 },
         { wch: 20 },
+        { wch: 12 },
         { wch: 10 }
       ];
       worksheet['!cols'] = columnWidths;
@@ -325,7 +335,7 @@ const MasterDashboard = () => {
                 <p className="text-sm font-medium text-white/80 mb-2">
                   Total Distributors
                 </p>
-                <p className="text-3xl font-bold">{activeDistributors}</p>
+                <p className="text-3xl font-bold">{distributors.length}</p>
               </CardContent>
             </Card>
 
@@ -374,7 +384,7 @@ const MasterDashboard = () => {
                   <div className="space-y-4">
                     {topDistributors.map((dist, index) => (
                       <div
-                        key={dist.distributor_unique_id}
+                        key={dist.distributor_id}
                         className="flex items-center justify-between pb-3 border-b border-border last:border-0"
                       >
                         <div className="flex items-center gap-3">
@@ -386,16 +396,14 @@ const MasterDashboard = () => {
                               {dist.distributor_name}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono">
-                              {dist.distributor_unique_id}
+                              {dist.distributor_id}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-green-600 text-sm">
                             ₹
-                            {parseFloat(
-                              dist.distributor_wallet_balance || "0"
-                            ).toLocaleString("en-IN", {
+                            {(dist.wallet_balance || 0).toLocaleString("en-IN", {
                               minimumFractionDigits: 2,
                             })}
                           </p>
@@ -435,7 +443,7 @@ const MasterDashboard = () => {
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-green-50 border border-green-100">
+                    {/* <div className="p-4 rounded-lg bg-green-50 border border-green-100">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-green-900">
                           Fund Distribution
@@ -447,7 +455,7 @@ const MasterDashboard = () => {
                       <p className="text-xs text-green-700 mt-1">
                         Of Total Balance
                       </p>
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Quick Stats */}
@@ -459,9 +467,7 @@ const MasterDashboard = () => {
                       <span className="font-bold">
                         ₹
                         {topDistributors.length > 0
-                          ? parseFloat(
-                              topDistributors[0].distributor_wallet_balance || "0"
-                            ).toLocaleString("en-IN")
+                          ? (topDistributors[0].wallet_balance || 0).toLocaleString("en-IN")
                           : "0"}
                       </span>
                     </div>
@@ -472,12 +478,10 @@ const MasterDashboard = () => {
                       <span className="font-bold">
                         ₹
                         {distributors.length > 0
-                          ? parseFloat(
+                          ? (
                               [...distributors].sort(
-                                (a, b) =>
-                                  parseFloat(a.distributor_wallet_balance || "0") -
-                                  parseFloat(b.distributor_wallet_balance || "0")
-                              )[0].distributor_wallet_balance || "0"
+                                (a, b) => (a.wallet_balance || 0) - (b.wallet_balance || 0)
+                              )[0].wallet_balance || 0
                             ).toLocaleString("en-IN")
                           : "0"}
                       </span>
@@ -488,7 +492,7 @@ const MasterDashboard = () => {
                       </span>
                       <span className="font-bold">{distributors.length} Users</span>
                     </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10">
+                    {/* <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10">
                       <span className="text-sm font-medium text-primary">
                         Available to Distribute
                       </span>
@@ -498,7 +502,7 @@ const MasterDashboard = () => {
                           minimumFractionDigits: 2,
                         })}
                       </span>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </CardContent>
@@ -629,13 +633,13 @@ const MasterDashboard = () => {
                     <TableBody>
                       {paginatedDistributors.map((dist, index) => (
                         <TableRow
-                          key={dist.distributor_unique_id}
+                          key={dist.distributor_id}
                           className={`${
                             index % 2 === 0 ? "bg-background" : "bg-muted/20"
                           } hover:bg-muted/50 transition-colors`}
                         >
                           <TableCell className="text-center font-mono text-sm py-4">
-                            {dist.distributor_unique_id}
+                            {dist.distributor_id}
                           </TableCell>
                           <TableCell className="text-center font-medium py-4">
                             {dist.distributor_name}
@@ -648,16 +652,14 @@ const MasterDashboard = () => {
                           </TableCell>
                           <TableCell className="text-center font-semibold py-4">
                             ₹
-                            {parseFloat(
-                              dist.distributor_wallet_balance || "0"
-                            ).toLocaleString("en-IN", {
+                            {(dist.wallet_balance || 0).toLocaleString("en-IN", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
                           </TableCell>
                           <TableCell className="text-center py-4">
-                            <Badge className="bg-green-50 text-green-700 border-green-200">
-                              Active
+                            <Badge className={dist.is_blocked ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}>
+                              {dist.is_blocked ? "Blocked" : "Active"}
                             </Badge>
                           </TableCell>
                         </TableRow>
