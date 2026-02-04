@@ -55,7 +55,8 @@ interface FundRequest {
   utr_number: string;
   request_status: string;
   remarks: string;
-reject_remarks: string;
+  reject_remarks: string;
+  request_type: string;
   created_at: string;
   updated_at: string;
 }
@@ -69,11 +70,11 @@ interface DecodedToken {
   iat: number;
 }
 
-interface FundRequestFilter {
-  start_date?: string;
-  end_date?: string;
-  status?: string;
-  id: string;
+interface PaginationInfo {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 // Helper function to get today's date in YYYY-MM-DD format
@@ -88,12 +89,17 @@ const getTodayDate = () => {
 export default function MasterDistributorFundRequests() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<FundRequest[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<FundRequest[]>([]);
   const [walletBalance, setWalletBalance] = useState(0);
   const [distributorId, setDistributorId] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage, setRecordsPerPage] = useState(10);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Filter states - Initialize with today's date
   const [searchTerm, setSearchTerm] = useState("");
@@ -101,9 +107,13 @@ export default function MasterDistributorFundRequests() {
   const [startDate, setStartDate] = useState(getTodayDate());
   const [endDate, setEndDate] = useState(getTodayDate());
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage, setRecordsPerPage] = useState(10);
+  // Applied filters (only update on Apply button click)
+  const [appliedFilters, setAppliedFilters] = useState({
+    searchTerm: "",
+    statusFilter: "ALL",
+    startDate: getTodayDate(),
+    endDate: getTodayDate(),
+  });
 
   // ✅ Decode token and get master distributor user_id
   useEffect(() => {
@@ -138,190 +148,160 @@ export default function MasterDistributorFundRequests() {
     }
   }, []);
 
+  // Fetch data when distributorId, pagination, or applied filters change
   useEffect(() => {
     if (!distributorId) return;
     fetchData();
-  }, [distributorId]);
+  }, [distributorId, currentPage, recordsPerPage, appliedFilters]);
 
-const fetchData = async () => {
+  const getRequestTypeBadge = (type: string) => {
+    switch (type?.toUpperCase()) {
+      case "ADVANCE":
+        return (
+          <Badge className="bg-purple-100 text-purple-700 border-purple-300">
+            Advance
+          </Badge>
+        );
+      case "NORMAL":
+        return (
+          <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+            Normal
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="bg-gray-100 text-gray-700 border-gray-300">
+            {type || "-"}
+          </Badge>
+        );
+    }
+  };
+
+  const fetchData = async () => {
+    if (!distributorId) return;
+
     setLoading(true);
+    setError(null);
+
     const token = localStorage.getItem("authToken");
+    if (!token) {
+      setError("Authentication token missing");
+      setLoading(false);
+      return;
+    }
 
     try {
-      // ✅ Build filter payload
-      // For Master Distributor: id = their user_id (they are the REQUESTER)
-      const filterPayload: FundRequestFilter = {
-        id: distributorId, // This should be M000003 or similar
-      };
-
-      // Add optional filters if set
-      if (startDate) {
-        // Format: "2026-01-14T00:00:00Z"
-        const startDateTime = new Date(startDate);
-        startDateTime.setHours(0, 0, 0, 0);
-        filterPayload.start_date = startDateTime.toISOString();
-      }
-      if (endDate) {
-        // Format: "2026-01-14T23:59:59Z"
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        filterPayload.end_date = endDateTime.toISOString();
-      }
-      if (statusFilter !== "ALL") {
-        filterPayload.status = statusFilter;
-      }
-
-      // ✅ Calculate pagination offset
       const offset = (currentPage - 1) * recordsPerPage;
 
-      // ✅ Build query params for pagination
-      const queryParams = new URLSearchParams({
-        limit: recordsPerPage.toString(),
-        offset: offset.toString(),
-      });
+      // ✅ Build request body (matches Go model)
+      const payload: any = {
+        id: distributorId,
+        limit: recordsPerPage,
+        offset,
+      };
 
-      console.log("=== API REQUEST ===");
-      console.log("Endpoint:", import.meta.env.VITE_API_BASE_URL + "/fund_request/get/requester");
-      console.log("Filter Payload:", JSON.stringify(filterPayload, null, 2));
-      console.log("Pagination:", { limit: recordsPerPage, offset });
-      console.log("Master Distributor ID:", distributorId);
+      if (appliedFilters.startDate) {
+        payload.start_date = new Date(
+          `${appliedFilters.startDate}T00:00:00`
+        ).toISOString();
+      }
 
-      // ✅ POST request to get fund requests where Master Distributor is the REQUESTER
+      if (appliedFilters.endDate) {
+        payload.end_date = new Date(
+          `${appliedFilters.endDate}T23:59:59`
+        ).toISOString();
+      }
+
+      if (appliedFilters.statusFilter !== "ALL") {
+        payload.status = appliedFilters.statusFilter;
+      }
+
+      if (appliedFilters.searchTerm.trim()) {
+        payload.search = appliedFilters.searchTerm.trim();
+      }
+
+      // 🔥 Debug
+      console.log("🚀 FUND REQUEST PAYLOAD:", payload);
+
       const res = await axios.post(
-        import.meta.env.VITE_API_BASE_URL + `/fund_request/get/requester?${queryParams.toString()}`,
-        filterPayload,
-        { 
-          headers: { 
+        `${import.meta.env.VITE_API_BASE_URL}/fund_request/get/requester`,
+        payload,
+        {
+          headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          } 
+            "Content-Type": "application/json",
+          },
         }
       );
 
-      console.log("=== API RESPONSE ===");
-      console.log("Full Response:", res.data);
-      console.log("Response Status:", res.data.status);
-      console.log("Response Data:", res.data.data);
+      console.log("✅ FUND REQUEST RESPONSE:", res.data);
 
-      if (res.data.status === "success") {
-        // ✅ Extract fund_requests array from response
-        let fundRequestsData: any[] = [];
-        
-        if (res.data.data && res.data.data.fund_requests) {
-          fundRequestsData = res.data.data.fund_requests;
-          console.log("Found fund_requests in data.fund_requests");
-        } else if (res.data.fund_requests) {
-          fundRequestsData = res.data.fund_requests;
-          console.log("Found fund_requests directly in response");
-        } else if (Array.isArray(res.data.data)) {
-          fundRequestsData = res.data.data;
-          console.log("data is directly an array");
-        } else {
-          console.log("No fund_requests found in response");
-        }
-        
-        console.log("Extracted fund_requests array:", fundRequestsData);
-        console.log("Array length:", fundRequestsData.length);
-        
-        // Ensure we always have an array
-        const fundRequests: FundRequest[] = Array.isArray(fundRequestsData) 
-          ? fundRequestsData 
-          : [];
-        
-        console.log("=== FINAL DATA ===");
-        console.log("Final fund requests count:", fundRequests.length);
-        console.log("Fund requests:", fundRequests);
-        
-        setRequests(fundRequests);
-        setFilteredRequests(fundRequests);
-        
-        if (fundRequests.length === 0) {
-          setError("No fund requests found for the selected filters.");
-        } else {
-          setError(null);
-        }
-      } else {
-        console.log("API response status is not success");
-        setRequests([]);
-        setFilteredRequests([]);
-        setError(res.data.message || "Failed to load fund requests.");
+      if (res.data?.status !== "success") {
+        throw new Error(res.data?.message || "API failed");
       }
 
-      // ✅ Fetch wallet balance for master distributor
-      try {
-        const walletRes = await axios.get(
-          import.meta.env.VITE_API_BASE_URL + `/md/wallet/get/balance/${distributorId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      const fundRequests: FundRequest[] =
+        res.data?.data?.fund_requests ?? [];
 
-        console.log("Wallet Response:", walletRes.data);
-        const balance = walletRes.data?.data?.balance;
-        setWalletBalance(balance ? Number(balance) : 0);
-      } catch (walletErr) {
-        console.error("Error fetching wallet balance:", walletErr);
-        // Don't fail the whole request if wallet fetch fails
-        setWalletBalance(0);
+      setRequests(fundRequests);
+
+      setTotalRecords(res.data?.data?.total ?? fundRequests.length);
+      setTotalPages(
+        Math.ceil(
+          (res.data?.data?.total ?? fundRequests.length) / recordsPerPage
+        )
+      );
+
+      if (fundRequests.length === 0) {
+        setError("No fund requests found.");
       }
     } catch (err: any) {
-      console.error("=== ERROR ===");
-      console.error("Error fetching fund requests:", err);
-      console.error("Error response:", err.response?.data);
-      console.error("Error status:", err.response?.status);
-      
-      // Always ensure we have arrays set
+      console.error("❌ FETCH FUND REQUEST ERROR:", err);
+      console.error("📦 BACKEND ERROR:", err?.response?.data);
+
       setRequests([]);
-      setFilteredRequests([]);
-      
-      if (err.response?.status === 404) {
-        setError("No fund requests found.");
-      } else if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Failed to fetch fund requests. Please try again.");
-      }
+      setTotalRecords(0);
+      setTotalPages(0);
+
+      setError(
+        err?.response?.data?.message ||
+          "Failed to fetch fund requests"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Apply search filter (client-side)
-  useEffect(() => {
-    let filtered = [...requests];
-
-    // Search filter
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (req) =>
-          req.requester_id?.toLowerCase().includes(searchLower) ||
-          req.request_to_id?.toLowerCase().includes(searchLower) ||
-          req.bank_name?.toLowerCase().includes(searchLower) ||
-          req.utr_number?.toLowerCase().includes(searchLower) ||
-          req.remarks?.toLowerCase().includes(searchLower) ||
-          req.fund_request_id?.toString().includes(searchLower)
-      );
-    }
-
-    setFilteredRequests(filtered);
-    setCurrentPage(1);
-  }, [searchTerm, requests]);
+  // Apply filters (triggers API call)
+  const applyFilters = () => {
+    setAppliedFilters({
+      searchTerm,
+      statusFilter,
+      startDate,
+      endDate,
+    });
+    setCurrentPage(1); // Reset to first page when filters change
+  };
 
   // Clear all filters
   const clearFilters = () => {
+    const today = getTodayDate();
     setSearchTerm("");
     setStatusFilter("ALL");
-    setStartDate(getTodayDate());
-    setEndDate(getTodayDate());
-  };
-
-  // Apply filters (triggers API call)
-  const applyFilters = () => {
-    fetchData();
+    setStartDate(today);
+    setEndDate(today);
+    setAppliedFilters({
+      searchTerm: "",
+      statusFilter: "ALL",
+      startDate: today,
+      endDate: today,
+    });
+    setCurrentPage(1);
   };
 
   // Format date - Only show date without time
   const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A";
+    if (!dateString) return "-";
     try {
       return new Date(dateString).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -333,15 +313,9 @@ const fetchData = async () => {
     }
   };
 
-  // Pagination logic
-  const safeFilteredRequests = Array.isArray(filteredRequests) ? filteredRequests : [];
-  const totalPages = Math.ceil(safeFilteredRequests.length / recordsPerPage);
-  const indexOfLastRecord = currentPage * recordsPerPage;
-  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-  const currentRecords = safeFilteredRequests.slice(
-    indexOfFirstRecord,
-    indexOfLastRecord
-  );
+  // Calculate display indices
+  const indexOfFirstRecord = (currentPage - 1) * recordsPerPage;
+  const indexOfLastRecord = Math.min(indexOfFirstRecord + recordsPerPage, totalRecords);
 
   // Get status badge color
   const getStatusBadge = (status: string) => {
@@ -359,7 +333,7 @@ const fetchData = async () => {
   };
 
   return (
-    <DashboardLayout role="master" >
+    <DashboardLayout role="master">
       <div className="min-h-screen bg-muted/10">
         {/* Header */}
         <div className="paybazaar-gradient border-b border-border/40 p-4 text-white">
@@ -473,6 +447,11 @@ const fetchData = async () => {
                     placeholder="Search by ID, bank, UTR..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        applyFilters();
+                      }
+                    }}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -491,8 +470,8 @@ const fetchData = async () => {
                       Fund Requests
                     </CardTitle>
                     <CardDescription className="mt-1 text-white/90">
-                      {safeFilteredRequests.length} request
-                      {safeFilteredRequests.length !== 1 ? "s" : ""} found
+                      {totalRecords} request
+                      {totalRecords !== 1 ? "s" : ""} found
                     </CardDescription>
                   </div>
                 </div>
@@ -541,9 +520,8 @@ const fetchData = async () => {
                     </span>
                   </div>
                   <div className="text-sm text-slate-700">
-                    Showing {indexOfFirstRecord + 1} to{" "}
-                    {Math.min(indexOfLastRecord, safeFilteredRequests.length)} of{" "}
-                    {safeFilteredRequests.length} entries
+                    Showing {totalRecords > 0 ? indexOfFirstRecord + 1 : 0} to{" "}
+                    {indexOfLastRecord} of {totalRecords} entries
                   </div>
                 </div>
               </div>
@@ -566,7 +544,7 @@ const fetchData = async () => {
                       {error}
                     </p>
                   </div>
-                ) : safeFilteredRequests.length === 0 ? (
+                ) : requests.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20">
                     <div className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-full bg-muted">
                       <FileText className="h-10 w-10 text-muted-foreground" />
@@ -594,6 +572,9 @@ const fetchData = async () => {
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Bank Name
                         </TableHead>
+                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          Request Type
+                        </TableHead>
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           UTR Number
                         </TableHead>
@@ -606,10 +587,9 @@ const fetchData = async () => {
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Remarks
                         </TableHead>
-                          <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Reject Reason 
-                          </TableHead>
-
+                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
+                          Reject Reason
+                        </TableHead>
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Status
                         </TableHead>
@@ -617,7 +597,7 @@ const fetchData = async () => {
                     </TableHeader>
 
                     <TableBody>
-                      {currentRecords.map((req, idx) => (
+                      {requests.map((req, idx) => (
                         <TableRow
                           key={req.fund_request_id}
                           className={`${
@@ -631,16 +611,19 @@ const fetchData = async () => {
                             #{req.fund_request_id}
                           </TableCell>
                           <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
-                            {req.request_to_id}
+                            {req.request_to_id || "-"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
-                            {req.bank_name || "N/A"}
+                            {req.bank_name || "-"}
+                          </TableCell>
+                          <TableCell className="py-3 text-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+                            {getRequestTypeBadge(req.request_type)}
                           </TableCell>
                           <TableCell className="py-3 text-center font-mono text-sm text-slate-700">
-                            {req.utr_number || "N/A"}
+                            {req.utr_number || "-"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
-                            {formatDate(req.request_date)}
+                            {formatDate(req.request_date || "")}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
                             ₹{" "}
@@ -650,7 +633,7 @@ const fetchData = async () => {
                             })}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm text-slate-700">
-                            {req.remarks || "N/A"}
+                            {req.remarks || "-"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm text-slate-700">
                             {req.reject_remarks || "-"}
@@ -668,7 +651,7 @@ const fetchData = async () => {
               </div>
 
               {/* Pagination */}
-              {safeFilteredRequests.length > 0 && totalPages > 1 && (
+              {totalRecords > 0 && totalPages > 1 && (
                 <div className="flex items-center justify-between border-t border-border px-4 py-4">
                   <div className="text-sm text-muted-foreground">
                     Page {currentPage} of {totalPages}
@@ -680,7 +663,7 @@ const fetchData = async () => {
                       onClick={() =>
                         setCurrentPage((prev) => Math.max(1, prev - 1))
                       }
-                      disabled={currentPage === 1}
+                      disabled={currentPage === 1 || loading}
                     >
                       Previous
                     </Button>
@@ -706,6 +689,7 @@ const fetchData = async () => {
                               }
                               size="sm"
                               onClick={() => setCurrentPage(pageNum)}
+                              disabled={loading}
                               className={
                                 currentPage === pageNum
                                   ? "paybazaar-gradient text-white"
@@ -724,7 +708,7 @@ const fetchData = async () => {
                       onClick={() =>
                         setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                       }
-                      disabled={currentPage === totalPages}
+                      disabled={currentPage === totalPages || loading}
                     >
                       Next
                     </Button>

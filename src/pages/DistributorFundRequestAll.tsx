@@ -56,6 +56,7 @@ interface FundRequest {
   request_status: string;
   remarks: string;
 reject_remarks: string;
+  request_type: string;
   created_at: string;
   updated_at: string;
 }
@@ -153,152 +154,124 @@ export default function DistributorFundRequests() {
     fetchData();
   }, [distributorId, currentPage, recordsPerPage, appliedFilters]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const token = localStorage.getItem("authToken");
-
-    try {
-      // Calculate offset
-      const offset = (currentPage - 1) * recordsPerPage;
-
-      // ✅ Build filter payload with pagination
-      const filterPayload: any = {
-        id: distributorId,
-        limit: recordsPerPage,
-        offset: offset,
-      };
-
-      // Add optional filters if set
-      if (appliedFilters.startDate) {
-        const startDateTime = new Date(appliedFilters.startDate);
-        startDateTime.setHours(0, 0, 0, 0);
-        filterPayload.start_date = startDateTime.toISOString();
-      }
-      if (appliedFilters.endDate) {
-        const endDateTime = new Date(appliedFilters.endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        filterPayload.end_date = endDateTime.toISOString();
-      }
-      if (appliedFilters.statusFilter !== "ALL") {
-        filterPayload.status = appliedFilters.statusFilter;
-      }
-      if (appliedFilters.searchTerm.trim()) {
-        filterPayload.search = appliedFilters.searchTerm.trim();
-      }
-
-      console.log("=== API REQUEST ===");
-      console.log("Endpoint:", import.meta.env.VITE_API_BASE_URL + "/fund_request/get/requester");
-      console.log("Filter Payload:", JSON.stringify(filterPayload, null, 2));
-      console.log("Distributor ID:", distributorId);
-
-      // ✅ POST request to get fund requests where Distributor is the REQUESTER
-      const res = await axios.post(
-        import.meta.env.VITE_API_BASE_URL + "/fund_request/get/requester",
-        filterPayload,
-        { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          } 
-        }
+  const getRequestTypeBadge = (type: string) => {
+  switch (type?.toUpperCase()) {
+    case "ADVANCE":
+      return (
+        <Badge className="bg-purple-100 text-purple-700 border-purple-300">
+          Advance
+        </Badge>
       );
+    case "NORMAL":
+      return (
+        <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+          Normal
+        </Badge>
+      );
+    default:
+      return (
+        <Badge className="bg-gray-100 text-gray-700 border-gray-300">
+          {type || "-"}
+        </Badge>
+      );
+  }
+};
 
-      console.log("=== API RESPONSE ===");
-      console.log("Full Response:", res.data);
-      console.log("Response Status:", res.data.status);
-      console.log("Response Data:", res.data.data);
+const fetchData = async () => {
+  if (!distributorId) return;
 
-      if (res.data.status === "success") {
-        // ✅ Extract fund_requests array from response
-        let fundRequestsData: any[] = [];
-        
-        if (res.data.data && res.data.data.fund_requests) {
-          fundRequestsData = res.data.data.fund_requests;
-          console.log("Found fund_requests in data.fund_requests");
-        } else if (res.data.fund_requests) {
-          fundRequestsData = res.data.fund_requests;
-          console.log("Found fund_requests directly in response");
-        } else if (Array.isArray(res.data.data)) {
-          fundRequestsData = res.data.data;
-          console.log("data is directly an array");
-        } else {
-          console.log("No fund_requests found in response");
-        }
-        
-        console.log("Extracted fund_requests array:", fundRequestsData);
-        console.log("Array length:", fundRequestsData.length);
-        
-        // Ensure we always have an array
-        const fundRequests: FundRequest[] = Array.isArray(fundRequestsData) 
-          ? fundRequestsData 
-          : [];
-        
-        // Set pagination info
-        const paginationInfo: PaginationInfo = res.data.data?.pagination || {
-          total: fundRequests.length,
-          page: currentPage,
-          limit: recordsPerPage,
-          totalPages: Math.ceil(fundRequests.length / recordsPerPage),
-        };
+  setLoading(true);
+  setError(null);
 
-        setTotalRecords(paginationInfo.total);
-        setTotalPages(paginationInfo.totalPages);
-        
-        console.log("=== FINAL DATA ===");
-        console.log("Final fund requests count:", fundRequests.length);
-        console.log("Pagination info:", paginationInfo);
-        console.log("Fund requests:", fundRequests);
-        
-        setRequests(fundRequests);
-        
-        if (fundRequests.length === 0) {
-          setError("No fund requests found for the selected filters.");
-        } else {
-          setError(null);
-        }
-      } else {
-        console.log("API response status is not success");
-        setRequests([]);
-        setTotalRecords(0);
-        setTotalPages(0);
-        setError(res.data.message || "Failed to load fund requests.");
-      }
+  const token = localStorage.getItem("authToken");
+  if (!token) {
+    setError("Authentication token missing");
+    setLoading(false);
+    return;
+  }
 
-      // ✅ Fetch wallet balance for distributor
-      try {
-        const walletRes = await axios.get(
-          import.meta.env.VITE_API_BASE_URL + `/distributor/wallet/get/balance/${distributorId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+  try {
+    const offset = (currentPage - 1) * recordsPerPage;
 
-        console.log("Wallet Response:", walletRes.data);
-        const balance = walletRes.data?.data?.balance;
-        setWalletBalance(balance ? Number(balance) : 0);
-      } catch (walletErr) {
-        console.error("Error fetching wallet balance:", walletErr);
-        setWalletBalance(0);
-      }
-    } catch (err: any) {
-      console.error("=== ERROR ===");
-      console.error("Error fetching fund requests:", err);
-      console.error("Error response:", err.response?.data);
-      console.error("Error status:", err.response?.status);
-      
-      setRequests([]);
-      setTotalRecords(0);
-      setTotalPages(0);
-      
-      if (err.response?.status === 404) {
-        setError("No fund requests found.");
-      } else if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Failed to fetch fund requests. Please try again.");
-      }
-    } finally {
-      setLoading(false);
+    // ✅ Build request body (matches Go model)
+    const payload: any = {
+      id: distributorId,
+      limit: recordsPerPage,
+      offset,
+    };
+
+    if (appliedFilters.startDate) {
+      payload.start_date = new Date(
+        `${appliedFilters.startDate}T00:00:00`
+      ).toISOString();
     }
-  };
+
+    if (appliedFilters.endDate) {
+      payload.end_date = new Date(
+        `${appliedFilters.endDate}T23:59:59`
+      ).toISOString();
+    }
+
+    if (appliedFilters.statusFilter !== "ALL") {
+      payload.status = appliedFilters.statusFilter;
+    }
+
+    if (appliedFilters.searchTerm.trim()) {
+      payload.search = appliedFilters.searchTerm.trim();
+    }
+
+    // 🔥 Debug
+    console.log("🚀 FUND REQUEST PAYLOAD:", payload);
+
+    const res = await axios.post(
+      `${import.meta.env.VITE_API_BASE_URL}/fund_request/get/requester`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("✅ FUND REQUEST RESPONSE:", res.data);
+
+    if (res.data?.status !== "success") {
+      throw new Error(res.data?.message || "API failed");
+    }
+
+    const fundRequests: FundRequest[] =
+      res.data?.data?.fund_requests ?? [];
+
+    setRequests(fundRequests);
+
+    setTotalRecords(res.data?.data?.total ?? fundRequests.length);
+    setTotalPages(
+      Math.ceil(
+        (res.data?.data?.total ?? fundRequests.length) / recordsPerPage
+      )
+    );
+
+    if (fundRequests.length === 0) {
+      setError("No fund requests found.");
+    }
+  } catch (err: any) {
+    console.error("❌ FETCH FUND REQUEST ERROR:", err);
+    console.error("📦 BACKEND ERROR:", err?.response?.data);
+
+    setRequests([]);
+    setTotalRecords(0);
+    setTotalPages(0);
+
+    setError(
+      err?.response?.data?.message ||
+        "Failed to fetch fund requests"
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Apply filters (triggers API call)
   const applyFilters = () => {
@@ -329,7 +302,7 @@ export default function DistributorFundRequests() {
 
   // Format date - Only show date without time
   const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A";
+    if (!dateString) return "-";
     try {
       return new Date(dateString).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -600,6 +573,9 @@ export default function DistributorFundRequests() {
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Bank Name
                         </TableHead>
+                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          Request Type
+                        </TableHead>
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           UTR Number
                         </TableHead>
@@ -637,16 +613,19 @@ export default function DistributorFundRequests() {
                             #{req.fund_request_id}
                           </TableCell>
                           <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
-                            {req.request_to_id}
+                            {req.request_to_id || "-"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
-                            {req.bank_name || "N/A"}
+                            {req.bank_name || "-"}
+                          </TableCell>
+                          <TableCell className="py-3 text-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+                            {getRequestTypeBadge(req.request_type)}
                           </TableCell>
                           <TableCell className="py-3 text-center font-mono text-sm text-slate-700">
-                            {req.utr_number || "N/A"}
+                            {req.utr_number || "-"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
-                            {formatDate(req.request_date)}
+                            {formatDate(req.request_date || "")}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
                             ₹{" "}
@@ -656,7 +635,7 @@ export default function DistributorFundRequests() {
                             })}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm text-slate-700">
-                            {req.remarks || "N/A"}
+                            {req.remarks || "-"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm text-slate-700">
                             {req.reject_remarks || "-"}

@@ -19,14 +19,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2, Copy, CheckCircle2 } from "lucide-react";
+import { Building2, ArrowLeft, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
-/* -------------------- TYPES -------------------- */
-
-interface TokenData {
+interface DecodedToken {
   admin_id: string;
   user_id: string;
   user_name: string;
@@ -34,6 +32,7 @@ interface TokenData {
   exp: number;
   iat: number;
 }
+
 interface AdminBank {
   admin_bank_id: number;
   bank_name: string;
@@ -41,13 +40,12 @@ interface AdminBank {
   ifsc_code: string;
 }
 
-/* -------------------- COMPONENT -------------------- */
-
 const RequestFunds = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
+    request_type: "NORMAL",
     bank_name: "",
     request_date: "",
     utr_number: "",
@@ -56,133 +54,103 @@ const RequestFunds = () => {
   });
 
   const [loading, setLoading] = useState(false);
-  const [tokenData, setTokenData] = useState<TokenData | null>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const [tokenData, setTokenData] = useState<DecodedToken | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-const [banks, setBanks] = useState<AdminBank[]>([]);
-
-
-  /* -------------------- BANK DETAILS -------------------- */
-
-  // const companyBankDetails = [
-  //   {
-  //     bankName: "AXIS BANK",
-  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-  //     accountNumber: "925020043148912",
-  //     ifscCode: "UTIB0000056",
-  //   },
-  //   {
-  //     bankName: "IDFC FIRST Bank",
-  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-  //     accountNumber: "10248252306",
-  //     ifscCode: "IDFB0020137",
-  //   },
-  // ];
-
-  const copyToClipboard = (text: string, field: string, bankIndex: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(`${field}-${bankIndex}`);
-    toast({ title: "Copied!", description: `${field} copied to clipboard` });
-    setTimeout(() => setCopiedField(null), 2000);
-  };
+  const [banks, setBanks] = useState<AdminBank[]>([]);
 
   const redirectTo = useCallback(
-    (path: string) => navigate(path, { replace: true }),
+    (path: string) => {
+      navigate(path, { replace: true });
+    },
     [navigate]
   );
 
   /* -------------------- AUTH CHECK -------------------- */
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    const userRole = localStorage.getItem("userRole");
-
-    if (!token || !userRole) {
-      redirectTo("/login");
-      return;
-    }
-
-    try {
-      const decoded: TokenData = jwtDecode(token);
-
-      if (decoded.exp * 1000 < Date.now()) {
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("userRole");
+    const checkAuth = () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to access this page.",
+          variant: "destructive",
+        });
         redirectTo("/login");
         return;
       }
 
-      setTokenData(decoded);
-      setRole(userRole);
-    } catch (err) {
-      console.error("Token decode failed", err);
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("userRole");
-      redirectTo("/login");
-    } finally {
-      setIsCheckingAuth(false);
-    }
-  }, [redirectTo]);
-
-
-    useEffect(() => {
-  const fetchBanks = async () => {
-    try {
-      if (!tokenData?.admin_id) return;
-
-      const token = localStorage.getItem("authToken");
-
-      const res = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/bank/get/admin/${tokenData.admin_id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      console.log("Banks API response:", res.data);
-
-      if (res.data.status === "success") {
-        setBanks(res.data.data.admin_banks); // 👈 NOT .banks
-      }
-    } catch (err) {
-      console.error("Bank fetch failed:", err);
-      setBanks([]);
-    }
-  };
-
-  fetchBanks();
-}, [tokenData?.admin_id]);
-
-
-  /* -------------------- WALLET BALANCE -------------------- */
-
-  useEffect(() => {
-    const fetchWalletBalance = async () => {
-      const token = localStorage.getItem("authToken");
-      if (!token || !tokenData) return;
-
       try {
-        const res = await axios.get(
-          `${import.meta.env.VITE_API_BASE_URL}/wallet/get/balance/${
-            tokenData.user_id
-          }`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const decoded: DecodedToken = jwtDecode(token);
 
-        if (res.data.status === "success") {
-          setWalletBalance(Number(res.data.data.balance));
+        if (!decoded?.exp || decoded.exp * 1000 < Date.now()) {
+          localStorage.removeItem("authToken");
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please log in again.",
+            variant: "destructive",
+          });
+          redirectTo("/login");
+          return;
         }
-      } catch {
-        setWalletBalance(0);
+
+        if (!decoded.user_id) {
+          toast({
+            title: "Invalid Token",
+            description: "Master Distributor ID missing.",
+            variant: "destructive",
+          });
+          redirectTo("/login");
+          return;
+        }
+
+        setTokenData(decoded);
+      } catch (err) {
+        console.error("Token decode error:", err);
+        localStorage.removeItem("authToken");
+        toast({
+          title: "Authentication Error",
+          description: "Invalid session. Please log in again.",
+          variant: "destructive",
+        });
+        redirectTo("/login");
+      } finally {
+        setIsCheckingAuth(false);
       }
     };
 
-    fetchWalletBalance();
-  }, [tokenData]);
+    checkAuth();
+  }, [toast, redirectTo]);
 
-  /* -------------------- FORM HELPERS -------------------- */
+  /* -------------------- FETCH BANKS -------------------- */
+
+  useEffect(() => {
+    const fetchBanks = async () => {
+      try {
+        if (!tokenData?.admin_id) return;
+
+        const token = localStorage.getItem("authToken");
+
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_BASE_URL}/bank/get/admin/${tokenData.admin_id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (res.data.status === "success") {
+          setBanks(res.data.data.admin_banks);
+        }
+      } catch (err) {
+        console.error("Bank fetch failed:", err);
+        setBanks([]);
+      }
+    };
+
+    fetchBanks();
+  }, [tokenData?.admin_id]);
+
+  /* -------------------- FORM HANDLERS -------------------- */
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -191,22 +159,53 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
-  const validateForm = () => {
-    if (!formData.bank_name) return toastError("Please select a bank");
-    if (!formData.request_date) return toastError("Request date is required");
-    if (!formData.utr_number) return toastError("UTR number is required");
-    if (!formData.amount || Number(formData.amount) <= 0)
-      return toastError("Amount must be greater than 0");
-    return true;
+  const handleRequestTypeChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      request_type: value,
+      // Clear bank and UTR fields when switching to ADVANCE
+      bank_name: value === "ADVANCE" ? "" : prev.bank_name,
+      utr_number: value === "ADVANCE" ? "" : prev.utr_number,
+    }));
   };
 
-  const toastError = (msg: string) => {
-    toast({
-      title: "Validation Error",
-      description: msg,
-      variant: "destructive",
-    });
-    return false;
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.request_type) {
+      errors.request_type = "Please select a request type";
+    }
+
+    // For NORMAL requests, bank_name and utr_number are required
+    if (formData.request_type === "NORMAL") {
+      if (!formData.bank_name) {
+        errors.bank_name = "Please select a bank";
+      }
+      if (!formData.utr_number) {
+        errors.utr_number = "UTR number is required for normal requests";
+      }
+    }
+
+    if (!formData.request_date) {
+      errors.request_date = "Request date is required";
+    }
+    if (!formData.amount) {
+      errors.amount = "Amount is required";
+    } else if (parseFloat(formData.amount) <= 0) {
+      errors.amount = "Amount must be greater than 0";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0];
+      toast({
+        title: "Validation Error",
+        description: firstError,
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return true;
   };
 
   /* -------------------- SUBMIT -------------------- */
@@ -215,30 +214,59 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     e.preventDefault();
 
     if (!tokenData) {
+      toast({
+        title: "Authentication Error",
+        description: "User session not found. Please log in again.",
+        variant: "destructive",
+      });
       redirectTo("/login");
       return;
     }
 
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     const token = localStorage.getItem("authToken");
-    if (!token) return redirectTo("/login");
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to submit the request.",
+        variant: "destructive",
+      });
+      redirectTo("/login");
+      return;
+    }
 
-    const payload = {
+    // Build payload
+    const payload: any = {
       requester_id: tokenData.user_id,
       request_to_id: tokenData.admin_id,
-      amount: Number(formData.amount),
-      bank_name: formData.bank_name,
+      amount: parseFloat(formData.amount),
       request_date: new Date(formData.request_date).toISOString(),
-      utr_number: formData.utr_number,
+      request_type: formData.request_type,
       remarks: formData.remarks.trim() || "Admin, please approve",
     };
 
+    // Add bank_name and utr_number only for NORMAL requests
+    if (formData.request_type === "NORMAL") {
+      payload.bank_name = formData.bank_name;
+      payload.utr_number = formData.utr_number;
+    } else {
+      // For ADVANCE requests, set as empty strings
+      payload.bank_name = "";
+      payload.utr_number = "";
+    }
+
     try {
       setLoading(true);
+      toast({
+        title: "Submitting Request",
+        description: "Please wait while we process your fund request...",
+      });
 
       const { data } = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/fund_request/create`,
+        import.meta.env.VITE_API_BASE_URL + "/fund_request/create",
         payload,
         {
           headers: {
@@ -249,9 +277,16 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
       );
 
       if (data.status === "success") {
-        toast({ title: "Success", description: data.message });
+        toast({
+          title: "Success",
+          description:
+            data.message ||
+            "Fund request submitted successfully. We will process it shortly.",
+        });
 
+        // Reset form
         setFormData({
+          request_type: "NORMAL",
           bank_name: "",
           request_date: "",
           utr_number: "",
@@ -259,21 +294,44 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
           remarks: "",
         });
 
-        setTimeout(
-          () => redirectTo(role === "master" ? "/master" : "/distributor"),
-          1200
-        );
+        setTimeout(() => {
+          redirectTo("/master");
+        }, 1500);
       } else {
         toast({
           title: "Request Failed",
-          description: data.message,
+          description:
+            data.message || "Failed to submit fund request. Please try again.",
           variant: "destructive",
         });
       }
     } catch (err: any) {
+      console.error("Fund request error:", err);
+
+      let errorMessage = "Something went wrong. Please try again.";
+
+      if (err.response) {
+        if (err.response.status === 400) {
+          errorMessage =
+            err.response.data?.message ||
+            "Invalid request data. Please check all fields.";
+        } else if (err.response.status === 401) {
+          errorMessage = "Session expired. Please log in again.";
+          setTimeout(() => redirectTo("/login"), 2000);
+        } else if (err.response.status === 403) {
+          errorMessage = "You don't have permission to perform this action.";
+        } else if (err.response.status === 500) {
+          errorMessage = "Server error. Please try again later.";
+        } else {
+          errorMessage = err.response.data?.message || errorMessage;
+        }
+      } else if (err.request) {
+        errorMessage = "Network error. Please check your internet connection.";
+      }
+
       toast({
         title: "Request Failed",
-        description: err.response?.data?.message || "Something went wrong",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -286,145 +344,121 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
   if (isCheckingAuth) {
     return (
       <DashboardLayout role="master">
-        <div className="flex min-h-screen items-center justify-center">
-          Checking authentication...
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="animate-pulse text-lg text-muted-foreground">
+            Checking authentication...
+          </div>
         </div>
       </DashboardLayout>
     );
   }
 
-  /* -------------------- UI (UNCHANGED) -------------------- */
+  const isNormalRequest = formData.request_type === "NORMAL";
+  const isAdvanceRequest = formData.request_type === "ADVANCE";
+
+  /* -------------------- RENDER -------------------- */
 
   return (
     <DashboardLayout role="master">
-      <div className="flex-1 bg-muted/10">
-        <main className="flex flex-col items-center p-6">
-          {/* Bank Details Section */}
-          {/* <div className="mb-6 flex w-full max-w-3xl flex-col">
-            <Card className="overflow-hidden rounded-xl border-2 border-primary/20 shadow-lg">
-              <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  Transfer Funds to Paybazaar Account
-                </CardTitle>
-                <CardDescription>
-                  Please transfer the amount to one of the following bank
-                  accounts
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {companyBankDetails.map((bank, index) => (
-                    <div
-                      key={index}
-                      className="rounded-lg border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/50"
-                    >
-                      <div className="mb-3 flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold text-foreground">
-                          {bank.bankName}
-                        </h3>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <p className="mb-1 text-xs text-muted-foreground">
-                            Account Holder
-                          </p>
-                          <p className="font-medium text-foreground">
-                            {bank.accountHolder}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="mb-1 text-xs text-muted-foreground">
-                            Account Number
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <p className="font-mono font-medium text-foreground">
-                              {bank.accountNumber}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                copyToClipboard(
-                                  bank.accountNumber,
-                                  "account",
-                                  index
-                                )
-                              }
-                              className="rounded p-1 transition-colors hover:bg-muted"
-                              title="Copy Account Number"
-                            >
-                              {copiedField === `account-${index}` ? (
-                                <CheckCircle2 className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <Copy className="h-3 w-3 text-muted-foreground" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="mb-1 text-xs text-muted-foreground">
-                            IFSC Code
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <p className="font-mono font-medium text-foreground">
-                              {bank.ifscCode}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                copyToClipboard(bank.ifscCode, "ifsc", index)
-                              }
-                              className="rounded p-1 transition-colors hover:bg-muted"
-                              title="Copy IFSC Code"
-                            >
-                              {copiedField === `ifsc-${index}` ? (
-                                <CheckCircle2 className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <Copy className="h-3 w-3 text-muted-foreground" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
-                  <p className="text-sm text-blue-900 dark:text-blue-100">
-                    <strong>Note:</strong> After transferring funds, please fill
-                    the form below with your transaction details (UTR number,
-                    amount, etc.) to complete the fund request.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div> */}
+      <div className="min-h-screen bg-muted/10">
+        {/* Header */}
+        <div className="paybazaar-gradient border-b border-border/40 p-4 text-white">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate(-1)}
+              className="text-white hover:bg-white/20"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
 
+        {/* Main Content */}
+        <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
           {/* Fund Request Form */}
-          <div className="flex w-full max-w-3xl flex-col">
-            <Card className="animate-fade-in overflow-hidden rounded-xl border border-border shadow-lg">
-              <CardHeader className="paybazaar-gradient rounded-t-xl text-white">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-1 rounded-full bg-white/30"></div>
-                  <div>
-                    <CardTitle className="text-2xl font-bold">
-                      Request E-Value
-                    </CardTitle>
-                    <CardDescription className="mt-1 text-white/90">
-                      Submit your fund request with transaction details
-                    </CardDescription>
-                  </div>
+          <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
+            <CardHeader className="paybazaar-gradient rounded-none border-b border-border/40 text-white">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-1 rounded-full bg-white/30"></div>
+                <div>
+                  <CardTitle className="text-xl font-semibold">
+                    Fund Request Form
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-white/90">
+                    Fill in your transaction details below
+                  </CardDescription>
                 </div>
-              </CardHeader>
-              <CardContent className="bg-gradient-to-br from-background to-muted/30 p-8">
-                <form
-                  onSubmit={handleSubmit}
-                  className="space-y-6"
-                  aria-label="Fund request form"
-                >
-                  <div className="grid grid-cols-2 gap-6">
-                    {/* Bank Name Dropdown */}
+              </div>
+            </CardHeader>
+            <CardContent className="bg-gradient-to-br from-background to-muted/30 p-8">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Request Type Selection - Always First */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="request_type"
+                    className="flex items-center gap-1 text-sm font-semibold text-foreground"
+                  >
+                    Request Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={formData.request_type}
+                    onValueChange={handleRequestTypeChange}
+                    required
+                  >
+                    <SelectTrigger className="h-12 border-2 border-border bg-background transition-colors focus:border-primary">
+                      <SelectValue placeholder="Select Request Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NORMAL">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          <div className="flex flex-col">
+                            <span className="font-medium">Normal Request</span>
+                            <span className="text-xs text-muted-foreground">
+                              With bank transfer and UTR
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="ADVANCE">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <div className="flex flex-col">
+                            <span className="font-medium">Advance Request</span>
+                            <span className="text-xs text-muted-foreground">
+                              Without bank transfer details
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Info message based on request type */}
+                  {isNormalRequest && (
+                    <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg mt-2">
+                      <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-blue-900 dark:text-blue-100">
+                        For normal requests, please transfer funds to the selected bank account and provide the UTR number.
+                      </p>
+                    </div>
+                  )}
+
+                  {isAdvanceRequest && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg mt-2">
+                      <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-amber-900 dark:text-amber-100">
+                        Advance requests do not require bank transfer details. Funds will be credited based on admin approval.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Bank Name Dropdown - Only for NORMAL */}
+                  {isNormalRequest && (
                     <div className="space-y-2">
                       <Label
                         htmlFor="bank_name"
@@ -437,53 +471,51 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
                         onValueChange={(value) =>
                           setFormData((prev) => ({ ...prev, bank_name: value }))
                         }
-                        required
+                        required={isNormalRequest}
                       >
                         <SelectTrigger className="h-12 border-2 border-border bg-background transition-colors focus:border-primary">
                           <SelectValue placeholder="Select Bank" />
                         </SelectTrigger>
-                      <SelectContent>
-  {banks.map((bank) => (
-    <SelectItem
-      key={bank.admin_bank_id}
-      value={bank.bank_name}
-    >
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2">
-          <Building2 className="h-4 w-4" />
-          <span className="font-medium">{bank.bank_name}</span>
-        </div>
-        <span className="text-xs text-muted-foreground">
-          IFSC: {bank.ifsc_code}
-        </span>
-      </div>
-    </SelectItem>
-  ))}
-</SelectContent>
-
+                        <SelectContent>
+                          {banks.map((bank) => (
+                            <SelectItem
+                              key={bank.admin_bank_id}
+                              value={bank.bank_name}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{bank.bank_name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({bank.ifsc_code})
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
+                  )}
 
-                    {/* Request Date */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="request_date"
-                        className="flex items-center gap-1 text-sm font-semibold text-foreground"
-                      >
-                        Request Date <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="request_date"
-                        type="date"
-                        value={formData.request_date}
-                        onChange={handleChange}
-                        className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
+                  {/* Request Date */}
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="request_date"
+                      className="flex items-center gap-1 text-sm font-semibold text-foreground"
+                    >
+                      Request Date <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="request_date"
+                      type="date"
+                      value={formData.request_date}
+                      onChange={handleChange}
+                      max={new Date().toISOString().split("T")[0]}
+                      className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
+                      required
+                    />
+                  </div>
 
-                    {/* UTR Number */}
+                  {/* UTR Number - Only for NORMAL */}
+                  {isNormalRequest && (
                     <div className="space-y-2">
                       <Label
                         htmlFor="utr_number"
@@ -498,84 +530,80 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
                         onChange={handleChange}
                         className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
                         placeholder="Enter UTR Number"
-                        required
-                        aria-required="true"
+                        required={isNormalRequest}
                       />
                     </div>
+                  )}
 
-                    {/* Amount */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="amount"
-                        className="flex items-center gap-1 text-sm font-semibold text-foreground"
-                      >
-                        Amount <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        value={formData.amount}
-                        onChange={handleChange}
-                        className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
-                        placeholder="Enter Amount"
-                        min="0"
-                        step="0.01"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Remarks - Now Optional */}
+                  {/* Amount */}
                   <div className="space-y-2">
                     <Label
-                      htmlFor="remarks"
+                      htmlFor="amount"
                       className="flex items-center gap-1 text-sm font-semibold text-foreground"
                     >
-                      Remarks{" "}
-                      <span className="text-xs text-muted-foreground">
-                        (Optional)
-                      </span>
+                      Amount <span className="text-destructive">*</span>
                     </Label>
-                    <Textarea
-                      id="remarks"
-                      value={formData.remarks}
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={formData.amount}
                       onChange={handleChange}
-                      className="min-h-[120px] resize-none border-2 border-border bg-background transition-colors focus:border-primary"
-                      placeholder="Enter any additional notes or remarks (leave empty for default message)"
+                      className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
+                      placeholder="Enter Amount"
+                      min="0"
+                      step="0.01"
+                      required
                     />
-                    <p className="text-xs text-muted-foreground">
-                      If left empty, default message will be: "Admin, please
-                      approve"
-                    </p>
                   </div>
+                </div>
 
-                  <div className="flex gap-4 pt-6">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 flex-1 border-2 hover:bg-muted"
-                      disabled={loading}
-                      onClick={() =>
-                        navigate(role === "master" ? "/master" : "/distributor")
-                      }
-                    >
-                      Cancel
-                    </Button>
+                {/* Remarks - Optional */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="remarks"
+                    className="flex items-center gap-1 text-sm font-semibold text-foreground"
+                  >
+                    Remarks{" "}
+                    <span className="text-xs text-muted-foreground">
+                      (Optional)
+                    </span>
+                  </Label>
+                  <Textarea
+                    id="remarks"
+                    value={formData.remarks}
+                    onChange={handleChange}
+                    className="min-h-[120px] resize-none border-2 border-border bg-background transition-colors focus:border-primary"
+                    placeholder="Enter any additional notes or remarks (leave empty for default message)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    If left empty, default message will be: "Admin, please
+                    approve"
+                  </p>
+                </div>
 
-                    <Button
-                      type="submit"
-                      className="paybazaar-gradient h-12 flex-1 font-semibold text-white shadow-lg hover:opacity-90"
-                      disabled={loading}
-                    >
-                      {loading ? "Submitting..." : "Submit"}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
+                <div className="flex gap-4 pt-6">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 flex-1 border-2 hover:bg-muted"
+                    disabled={loading}
+                    onClick={() => navigate("/master")}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    className="paybazaar-gradient h-12 flex-1 font-semibold text-white shadow-lg hover:opacity-90"
+                    disabled={loading}
+                  >
+                    {loading ? "Submitting..." : "Submit Request"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </DashboardLayout>
   );

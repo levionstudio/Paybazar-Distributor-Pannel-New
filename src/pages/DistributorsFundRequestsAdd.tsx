@@ -19,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2, Copy, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Building2, ArrowLeft, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -40,81 +40,23 @@ interface AdminBank {
   ifsc_code: string;
 }
 
-
 const RequestFundsDistributor = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-const [formData, setFormData] = useState({
-  bank_name: "",
-  request_date: "",
-  utr_number: "",
-  amount: "",
-  remarks: "",
-});
+  const [formData, setFormData] = useState({
+    request_type: "NORMAL",
+    bank_name: "",
+    request_date: "",
+    utr_number: "",
+    amount: "",
+    remarks: "",
+  });
 
   const [loading, setLoading] = useState(false);
   const [tokenData, setTokenData] = useState<DecodedToken | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-const [banks, setBanks] = useState<AdminBank[]>([]);
-  
-    useEffect(() => {
-  const fetchBanks = async () => {
-    try {
-      if (!tokenData?.admin_id) return;
-
-      const token = localStorage.getItem("authToken");
-
-      const res = await axios.get(
-        `${import.meta.env.VITE_API_BASE_URL}/bank/get/admin/${tokenData.admin_id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      console.log("Banks API response:", res.data);
-
-      if (res.data.status === "success") {
-        setBanks(res.data.data.admin_banks); // 👈 NOT .banks
-      }
-    } catch (err) {
-      console.error("Bank fetch failed:", err);
-      setBanks([]);
-    }
-  };
-
-  fetchBanks();
-}, [tokenData?.admin_id]);
-
-    
-
-  // // Bank details for fund transfer
-  // const companyBankDetails = [
-  //   {
-  //     bankName: "AXIS BANK",
-  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-  //     accountNumber: "925020043148912",
-  //     ifscCode: "UTIB0000056",
-  //   },
-  //   {
-  //     bankName: "IDFC FIRST Bank",
-  //     accountHolder: "PAYBAZAAR TECHNOLOGIES PRIVATE LIMITED",
-  //     accountNumber: "10248252306",
-  //     ifscCode: "IDFB0020137",
-  //   },
-  // ];
-
-  const copyToClipboard = (text: string, field: string, bankIndex: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(`${field}-${bankIndex}`);
-    toast({
-      title: "Copied!",
-      description: `${field} copied to clipboard`,
-    });
-    setTimeout(() => setCopiedField(null), 2000);
-  };
+  const [banks, setBanks] = useState<AdminBank[]>([]);
 
   const redirectTo = useCallback(
     (path: string) => {
@@ -123,7 +65,8 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     [navigate]
   );
 
-  // ✅ Decode token with correct user_id field
+  /* -------------------- AUTH CHECK -------------------- */
+
   useEffect(() => {
     const checkAuth = () => {
       const token = localStorage.getItem("authToken");
@@ -139,7 +82,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
 
       try {
         const decoded: DecodedToken = jwtDecode(token);
-        console.log("Decoded Token:", decoded);
 
         if (!decoded?.exp || decoded.exp * 1000 < Date.now()) {
           localStorage.removeItem("authToken");
@@ -152,7 +94,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
           return;
         }
 
-        // ✅ Check for user_id (this is the Distributor ID)
         if (!decoded.user_id) {
           toast({
             title: "Invalid Token",
@@ -163,7 +104,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
           return;
         }
 
-        console.log("Distributor ID (user_id):", decoded.user_id);
         setTokenData(decoded);
       } catch (err) {
         console.error("Token decode error:", err);
@@ -182,44 +122,35 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     checkAuth();
   }, [toast, redirectTo]);
 
-  // Fetch wallet balance
+  /* -------------------- FETCH BANKS -------------------- */
+
   useEffect(() => {
-    const fetchWalletBalance = async () => {
-      const distributorId = tokenData?.user_id;
-      const token = localStorage.getItem("authToken");
-
-      if (!distributorId || !token) return;
-
+    const fetchBanks = async () => {
       try {
+        if (!tokenData?.admin_id) return;
+
+        const token = localStorage.getItem("authToken");
+
         const res = await axios.get(
-          import.meta.env.VITE_API_BASE_URL + `/distributor/wallet/get/balance/${distributorId}`,
+          `${import.meta.env.VITE_API_BASE_URL}/bank/get/admin/${tokenData.admin_id}`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
-        console.log("Wallet Balance Response:", res.data);
-
-        if (
-          res.data.status === "success" &&
-          res.data.data?.balance !== undefined
-        ) {
-          setWalletBalance(Number(res.data.data.balance));
-        } else {
-          setWalletBalance(0);
+        if (res.data.status === "success") {
+          setBanks(res.data.data.admin_banks);
         }
       } catch (err) {
-        console.error("Wallet fetch error:", err);
-        setWalletBalance(0);
+        console.error("Bank fetch failed:", err);
+        setBanks([]);
       }
     };
 
-    if (tokenData) {
-      fetchWalletBalance();
-    }
-  }, [tokenData]);
+    fetchBanks();
+  }, [tokenData?.admin_id]);
+
+  /* -------------------- FORM HANDLERS -------------------- */
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -228,17 +159,35 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
+  const handleRequestTypeChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      request_type: value,
+      // Clear bank and UTR fields when switching to ADVANCE
+      bank_name: value === "ADVANCE" ? "" : prev.bank_name,
+      utr_number: value === "ADVANCE" ? "" : prev.utr_number,
+    }));
+  };
+
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
-    if (!formData.bank_name) {
-      errors.bank_name = "Please select a bank";
+    if (!formData.request_type) {
+      errors.request_type = "Please select a request type";
     }
+
+    // For NORMAL requests, bank_name and utr_number are required
+    if (formData.request_type === "NORMAL") {
+      if (!formData.bank_name) {
+        errors.bank_name = "Please select a bank";
+      }
+      if (!formData.utr_number) {
+        errors.utr_number = "UTR number is required for normal requests";
+      }
+    }
+
     if (!formData.request_date) {
       errors.request_date = "Request date is required";
-    }
-    if (!formData.utr_number) {
-      errors.utr_number = "UTR number is required";
     }
     if (!formData.amount) {
       errors.amount = "Amount is required";
@@ -259,6 +208,8 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     return true;
   };
 
+  /* -------------------- SUBMIT -------------------- */
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -272,7 +223,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
       return;
     }
 
-    // Validate form before submission
     if (!validateForm()) {
       return;
     }
@@ -288,19 +238,25 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
       return;
     }
 
-    // ✅ Build payload with correct fields from token
-    const payload = {
-      requester_id: tokenData.user_id, // Distributor ID
-      request_to_id: tokenData.admin_id, // Admin ID (who they're requesting TO)
-      bank_name: formData.bank_name,
-      request_date: new Date(formData.request_date).toISOString(),
-      utr_number: formData.utr_number,
+    // Build payload
+    const payload: any = {
+      requester_id: tokenData.user_id,
+      request_to_id: tokenData.admin_id,
       amount: parseFloat(formData.amount),
+      request_date: new Date(formData.request_date).toISOString(),
+      request_type: formData.request_type,
       remarks: formData.remarks.trim() || "Admin, please approve",
     };
 
-    console.log("=== FUND REQUEST SUBMISSION ===");
-    console.log("Payload:", JSON.stringify(payload, null, 2));
+    // Add bank_name and utr_number only for NORMAL requests
+    if (formData.request_type === "NORMAL") {
+      payload.bank_name = formData.bank_name;
+      payload.utr_number = formData.utr_number;
+    } else {
+      // For ADVANCE requests, set as empty strings
+      payload.bank_name = "";
+      payload.utr_number = "";
+    }
 
     try {
       setLoading(true);
@@ -320,8 +276,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
         }
       );
 
-      console.log("API Response:", data);
-
       if (data.status === "success") {
         toast({
           title: "Success",
@@ -332,6 +286,7 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
 
         // Reset form
         setFormData({
+          request_type: "NORMAL",
           bank_name: "",
           request_date: "",
           utr_number: "",
@@ -340,10 +295,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
         });
 
         setTimeout(() => {
-          toast({
-            title: "Redirecting",
-            description: "Redirecting to dashboard...",
-          });
           redirectTo("/distributor");
         }, 1500);
       } else {
@@ -388,10 +339,11 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     }
   };
 
-  // Don't render anything until authentication check finishes
+  /* -------------------- LOADING -------------------- */
+
   if (isCheckingAuth) {
     return (
-      <DashboardLayout role="distributor" >
+      <DashboardLayout role="distributor">
         <div className="flex min-h-screen items-center justify-center bg-background">
           <div className="animate-pulse text-lg text-muted-foreground">
             Checking authentication...
@@ -401,8 +353,13 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
     );
   }
 
+  const isNormalRequest = formData.request_type === "NORMAL";
+  const isAdvanceRequest = formData.request_type === "ADVANCE";
+
+  /* -------------------- RENDER -------------------- */
+
   return (
-    <DashboardLayout role="distributor" >
+    <DashboardLayout role="distributor">
       <div className="min-h-screen bg-muted/10">
         {/* Header */}
         <div className="paybazaar-gradient border-b border-border/40 p-4 text-white">
@@ -415,121 +372,11 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            {/* <div>
-              <h1 className="text-2xl font-bold">Request E-Value</h1>
-              <p className="mt-1 text-sm text-white/80">
-                Submit your fund request with transaction details
-              </p>
-            </div> */}
           </div>
         </div>
 
         {/* Main Content */}
         <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
-          {/* Bank Details Section */}
-          {/* <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
-            <CardHeader className="paybazaar-gradient rounded-none border-b border-border/40 text-white">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-1 rounded-full bg-white/30"></div>
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-                    <Building2 className="h-5 w-5" />
-                    Transfer Funds to Paybazaar Account
-                  </CardTitle>
-                  <CardDescription className="mt-1 text-white/90">
-                    Please transfer the amount to one of the following bank accounts
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="bg-gradient-to-br from-background to-muted/30 p-6">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {companyBankDetails.map((bank, index) => (
-                  <div
-                    key={index}
-                    className="rounded-lg border-2 border-border bg-background p-4 transition-all hover:border-primary/50 hover:shadow-md"
-                  >
-                    <div className="mb-3 flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-primary" />
-                      <h3 className="font-semibold text-foreground">
-                        {bank.bankName}
-                      </h3>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">
-                          Account Holder
-                        </p>
-                        <p className="font-medium text-foreground">
-                          {bank.accountHolder}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">
-                          Account Number
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <p className="font-mono font-semibold text-foreground">
-                            {bank.accountNumber}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyToClipboard(
-                                bank.accountNumber,
-                                "Account Number",
-                                index
-                              )
-                            }
-                            className="rounded p-1 transition-colors hover:bg-muted"
-                            title="Copy Account Number"
-                          >
-                            {copiedField === `Account Number-${index}` ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">
-                          IFSC Code
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <p className="font-mono font-semibold text-foreground">
-                            {bank.ifscCode}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyToClipboard(bank.ifscCode, "IFSC Code", index)
-                            }
-                            className="rounded p-1 transition-colors hover:bg-muted"
-                            title="Copy IFSC Code"
-                          >
-                            {copiedField === `IFSC Code-${index}` ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
-                <p className="text-sm text-blue-900 dark:text-blue-100">
-                  <strong>Note:</strong> After transferring funds, please fill
-                  the form below with your transaction details (UTR number,
-                  amount, etc.) to complete the fund request.
-                </p>
-              </div>
-            </CardContent>
-          </Card> */}
-
           {/* Fund Request Form */}
           <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
             <CardHeader className="paybazaar-gradient rounded-none border-b border-border/40 text-white">
@@ -546,48 +393,107 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
               </div>
             </CardHeader>
             <CardContent className="bg-gradient-to-br from-background to-muted/30 p-8">
-              <form
-                onSubmit={handleSubmit}
-                className="space-y-6"
-                aria-label="Fund request form"
-              >
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Request Type Selection - Always First */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="request_type"
+                    className="flex items-center gap-1 text-sm font-semibold text-foreground"
+                  >
+                    Request Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={formData.request_type}
+                    onValueChange={handleRequestTypeChange}
+                    required
+                  >
+                    <SelectTrigger className="h-12 border-2 border-border bg-background transition-colors focus:border-primary">
+                      <SelectValue placeholder="Select Request Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NORMAL">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          <div className="flex flex-col">
+                            <span className="font-medium">Normal Request</span>
+                            <span className="text-xs text-muted-foreground">
+                              With bank transfer and UTR
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="ADVANCE">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <div className="flex flex-col">
+                            <span className="font-medium">Advance Request</span>
+                            <span className="text-xs text-muted-foreground">
+                              Without bank transfer details
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Info message based on request type */}
+                  {isNormalRequest && (
+                    <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg mt-2">
+                      <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-blue-900 dark:text-blue-100">
+                        For normal requests, please transfer funds to the selected bank account and provide the UTR number.
+                      </p>
+                    </div>
+                  )}
+
+                  {isAdvanceRequest && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg mt-2">
+                      <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-amber-900 dark:text-amber-100">
+                        Advance requests do not require bank transfer details. Funds will be credited based on admin approval.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-6">
-                  {/* Bank Name Dropdown */}
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="bank_name"
-                      className="flex items-center gap-1 text-sm font-semibold text-foreground"
-                    >
-                      Bank Name <span className="text-destructive">*</span>
-                    </Label>
-                 <Select
-  value={formData.bank_name}
-  onValueChange={(value) =>
-    setFormData((prev) => ({ ...prev, bank_name: value }))
-  }
->
-  <SelectTrigger>
-    <SelectValue placeholder="Select Bank" />
-  </SelectTrigger>
-
-  <SelectContent>
-    {banks.map((bank) => (
-      <SelectItem
-        key={bank.admin_bank_id}
-        value={bank.bank_name}
-      >
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{bank.bank_name}</span>
-          <span className="text-xs text-muted-foreground">
-            ({bank.ifsc_code})
-          </span>
-        </div>
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-
-                  </div>
+                  {/* Bank Name Dropdown - Only for NORMAL */}
+                  {isNormalRequest && (
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="bank_name"
+                        className="flex items-center gap-1 text-sm font-semibold text-foreground"
+                      >
+                        Bank Name <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={formData.bank_name}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, bank_name: value }))
+                        }
+                        required={isNormalRequest}
+                      >
+                        <SelectTrigger className="h-12 border-2 border-border bg-background transition-colors focus:border-primary">
+                          <SelectValue placeholder="Select Bank" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {banks.map((bank) => (
+                            <SelectItem
+                              key={bank.admin_bank_id}
+                              value={bank.bank_name}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{bank.bank_name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({bank.ifsc_code})
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   {/* Request Date */}
                   <div className="space-y-2">
@@ -602,31 +508,32 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
                       type="date"
                       value={formData.request_date}
                       onChange={handleChange}
+                      max={new Date().toISOString().split("T")[0]}
                       className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
                       required
-                      aria-required="true"
                     />
                   </div>
 
-                  {/* UTR Number */}
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="utr_number"
-                      className="flex items-center gap-1 text-sm font-semibold text-foreground"
-                    >
-                      UTR Number <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="utr_number"
-                      type="text"
-                      value={formData.utr_number}
-                      onChange={handleChange}
-                      className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
-                      placeholder="Enter UTR Number"
-                      required
-                      aria-required="true"
-                    />
-                  </div>
+                  {/* UTR Number - Only for NORMAL */}
+                  {isNormalRequest && (
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="utr_number"
+                        className="flex items-center gap-1 text-sm font-semibold text-foreground"
+                      >
+                        UTR Number <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="utr_number"
+                        type="text"
+                        value={formData.utr_number}
+                        onChange={handleChange}
+                        className="h-12 border-2 border-border bg-background transition-colors focus:border-primary"
+                        placeholder="Enter UTR Number"
+                        required={isNormalRequest}
+                      />
+                    </div>
+                  )}
 
                   {/* Amount */}
                   <div className="space-y-2">
@@ -646,7 +553,6 @@ const [banks, setBanks] = useState<AdminBank[]>([]);
                       min="0"
                       step="0.01"
                       required
-                      aria-required="true"
                     />
                   </div>
                 </div>

@@ -148,13 +148,13 @@ export function AppSidebar({ role }: AppSidebarProps) {
         { title: "Revert History", href: "/distributor/revert/history" },
       ]
 
-  const tdsItems = role === "master"
-    ? [
-        { title: "TDS History", href: "/md/tds/history" },
-      ]
-    : [
-        { title: "TDS History", href: "/distributor/tds/history" },
-      ]
+  // const tdsItems = role === "master"
+  //   ? [
+  //       { title: "TDS History", href: "/md/tds/history" },
+  //     ]
+  //   : [
+  //       { title: "TDS History", href: "/distributor/tds/history" },
+  //     ]
 
   return (
     <Sidebar
@@ -418,7 +418,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
           </SidebarGroup>
 
           {/* TDS COLLAPSIBLE */}
-          <SidebarGroup>
+          {/* <SidebarGroup>
             <SidebarGroupContent>
               {isCollapsed ? (
                 // COLLAPSED MODE (just icon)
@@ -473,7 +473,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
                 </Collapsible>
               )}
             </SidebarGroupContent>
-          </SidebarGroup>
+          </SidebarGroup> */}
         </div>
 
         {/* USER PROFILE */}
