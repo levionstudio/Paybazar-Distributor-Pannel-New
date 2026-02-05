@@ -40,28 +40,28 @@ interface DecodedToken {
 }
 
 interface MasterDistributorProfile {
-  MasterDistributorID: string;
-  AdminID: string;
-  Name: string;
-  Phone: string;
-  Email: string;
-  AadharNumber: string;
-  PanNumber: string;
-  DateOfBirth: string;
-  Gender: string;
-  City: string;
-  State: string;
-  Address: string;
-  Pincode: string;
-  BusinessName: string;
-  BusinessType: string;
-  KYCStatus: boolean;
-  DocumentsURL: string;
-  GSTNumber: string;
-  WalletBalance: number;
-  IsBlocked: boolean;
-  CreatedAt: string;
-  UpdatedAt: string;
+  master_distributor_id: string;
+  admin_id: string;
+  master_distributor_name: string;
+  master_distributor_phone: string;
+  master_distributor_email: string;
+  aadhar_number: string;
+  pan_number: string;
+  date_of_birth: string;
+  gender: string;
+  city: string;
+  state: string;
+  address: string;
+  pincode: string;
+  business_name: string;
+  business_type: string;
+  kyc_status: boolean;
+  documents_url: string | null;
+  gst_number: string | null;
+  wallet_balance: number;
+  is_blocked: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface UserInfo {
@@ -209,7 +209,7 @@ export default function MasterDistributorProfile() {
 
         // Fetch master distributor data
         const response = await axios.get(
-          `https://paybazaar-new.onrender.com/md/get/md/${decoded.user_id}`,
+          import.meta.env.VITE_API_BASE_URL + `/md/get/md/${decoded.user_id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -221,17 +221,17 @@ export default function MasterDistributorProfile() {
         if (response.data.status === "success" && response.data.data?.master_distributor) {
           const mdData: MasterDistributorProfile = response.data.data.master_distributor;
 
-          // Map API data to display format
+          // Map API data to display format (using correct field names from backend)
           setUserInfo({
-           name: mdData.distributor_name || "",
-            userId: mdData.distributor_id || "",
+            name: mdData.master_distributor_name || "",
+            userId: mdData.master_distributor_id || "",
             kycStatus: mdData.kyc_status ? "VERIFIED" : "NOT VERIFIED",
             avatar: "/lovable-uploads/c0876286-fbc5-4e25-b7e8-cb81e868b3fe.png",
             businessName: mdData.business_name || "",
             businessType: mdData.business_type || "",
             gstNumber: mdData.gst_number || "Not Provided",
-            mobileNo: mdData.distributor_phone || "",
-            email: mdData.distributor_email || "",
+            mobileNo: mdData.master_distributor_phone || "",
+            email: mdData.master_distributor_email || "",
             dateOfBirth: formatDateForDisplay(mdData.date_of_birth || ""),
             gender: mdData.gender || "",
             aadhaarNumber: mdData.aadhar_number || "",
@@ -242,16 +242,16 @@ export default function MasterDistributorProfile() {
             address: mdData.address || "",
             walletBalance: mdData.wallet_balance || 0,
             isBlocked: mdData.is_blocked || false,
-            masterDistributorId: mdData.master_distributor_id || "",
-            documentsUrl: mdData.DocumentsURL || "",
+            adminId: mdData.admin_id || "",
+            documentsUrl: mdData.documents_url || "",
           });
 
           // If documents URL is available, update KYC documents status
-          if (mdData.DocumentsURL) {
+          if (mdData.documents_url) {
             setKycDocuments(prev => prev.map(doc => ({
               ...doc,
               uploaded: true,
-              url: mdData.DocumentsURL
+              url: mdData.documents_url
             })));
           }
         } else {
@@ -469,14 +469,6 @@ export default function MasterDistributorProfile() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                          {/* <Button
-                            variant="secondary"
-                            onClick={() => navigate("/profile")}
-                            className="bg-white/10 hover:bg-white/20 text-white border-white/20"
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Update Profile
-                          </Button> */}
                           <div className="bg-white/10 px-4 py-2 rounded-lg">
                             <p className="text-white/70 text-xs">Wallet Balance</p>
                             <p className="text-white font-bold text-lg">
@@ -693,14 +685,6 @@ export default function MasterDistributorProfile() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* <Button
-                        variant="outline"
-                        className="justify-start"
-                        onClick={() => navigate("/profile")}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Profile
-                      </Button> */}
                       <Button 
                         variant="outline" 
                         className="justify-start"
@@ -709,10 +693,6 @@ export default function MasterDistributorProfile() {
                         <Upload className="h-4 w-4 mr-2" />
                         Upload Documents
                       </Button>
-                      {/* <Button variant="outline" className="justify-start">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        View KYC Status
-                      </Button> */}
                     </div>
                   </CardContent>
                 </Card>
