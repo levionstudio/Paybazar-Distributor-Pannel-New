@@ -175,28 +175,32 @@ export default function MasterDistributorFundRequests() {
     setCurrentPage(1);
   }, [allRequests, startDate, endDate, statusFilter, searchTerm]);
 
-  const getRequestTypeBadge = (type: string) => {
-    switch (type?.toUpperCase()) {
-      case "ADVANCE":
-        return (
-          <Badge className="bg-purple-100 text-purple-700 border-purple-300">
-            Advance
-          </Badge>
-        );
-      case "NORMAL":
-        return (
-          <Badge className="bg-blue-100 text-blue-700 border-blue-300">
-            Normal
-          </Badge>
-        );
-      default:
-        return (
-          <Badge className="bg-gray-100 text-gray-700 border-gray-300">
-            {type || "-"}
-          </Badge>
-        );
-    }
-  };
+const getRequestTypeBadge = (type: string) => {
+  const upper = type?.toUpperCase();
+
+  switch (upper) {
+    case "NORMAL":
+      return (
+        <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
+          Bank Transfer
+        </Badge>
+      );
+
+    case "ADVANCE":
+      return (
+        <Badge className="bg-purple-100 text-purple-700 border border-purple-300">
+          Advance Credit
+        </Badge>
+      );
+
+    default:
+      return (
+        <Badge className="bg-gray-100 text-gray-700 border border-gray-300">
+          {type || "-"}
+        </Badge>
+      );
+  }
+};
 
   const fetchData = async () => {
     if (!distributorId) return;

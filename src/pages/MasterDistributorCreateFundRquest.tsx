@@ -415,10 +415,8 @@ const RequestFunds = () => {
                         <div className="flex items-center gap-2">
                           <Building2 className="h-4 w-4" />
                           <div className="flex flex-col">
-                            <span className="font-medium">Normal Request</span>
-                            <span className="text-xs text-muted-foreground">
-                              With bank transfer and UTR
-                            </span>
+                            <span className="font-medium">Bank Transfer</span>
+                          
                           </div>
                         </div>
                       </SelectItem>
@@ -426,10 +424,8 @@ const RequestFunds = () => {
                         <div className="flex items-center gap-2">
                           <AlertCircle className="h-4 w-4" />
                           <div className="flex flex-col">
-                            <span className="font-medium">Advance Request</span>
-                            <span className="text-xs text-muted-foreground">
-                              Without bank transfer details
-                            </span>
+                            <span className="font-medium">Advance Credit Request</span>
+                          
                           </div>
                         </div>
                       </SelectItem>
