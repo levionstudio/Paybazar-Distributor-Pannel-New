@@ -622,7 +622,7 @@ useEffect(() => {
                           Date & Time
                         </TableHead>
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Transaction ID
+                          Reference ID
                         </TableHead>
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Type
@@ -660,7 +660,7 @@ useEffect(() => {
                             {formatDate(txn.created_at)}
                           </TableCell>
                           <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
-                            #{txn.wallet_transaction_id}
+                            {txn.reference_id}
                           </TableCell>
                           <TableCell className="py-3 text-center">
                             <Badge

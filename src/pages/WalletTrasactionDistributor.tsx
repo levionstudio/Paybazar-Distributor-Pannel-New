@@ -277,7 +277,6 @@ export default function DistributorTransactions() {
         "Date & Time": txn.created_at
           ? new Date(txn.created_at).toLocaleString("en-IN")
           : "N/A",
-        "Transaction ID": txn.wallet_transaction_id || "N/A",
         "Reference ID": txn.reference_id || "N/A",
         "Type": txn.credit_amount > 0 ? "CREDIT" : "DEBIT",
         "Credit Amount (₹)": parseFloat(txn.credit_amount?.toString() || "0").toFixed(2),
@@ -301,7 +300,6 @@ export default function DistributorTransactions() {
       const summaryRow = {
         "S.No": "",
         "Date & Time": "",
-        "Transaction ID": "TOTAL",
         "Reference ID": "",
         "Type": "",
         "Credit Amount (₹)": totalCredit.toFixed(2),
@@ -320,7 +318,6 @@ export default function DistributorTransactions() {
       const columnWidths = [
         { wch: 8 }, // S.No
         { wch: 20 }, // Date & Time
-        { wch: 20 }, // Transaction ID
         { wch: 15 }, // Reference ID
         { wch: 10 }, // Type
         { wch: 18 }, // Credit Amount
@@ -616,9 +613,7 @@ export default function DistributorTransactions() {
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Date & Time
                         </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Transaction ID
-                        </TableHead>
+                    
                         <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
                           Reference ID
                         </TableHead>
@@ -656,9 +651,6 @@ export default function DistributorTransactions() {
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
                             {formatDate(txn.created_at)}
-                          </TableCell>
-                          <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
-                            #{txn.wallet_transaction_id}
                           </TableCell>
                           <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
                             {txn.reference_id || "N/A"}
