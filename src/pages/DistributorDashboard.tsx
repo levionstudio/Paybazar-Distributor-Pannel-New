@@ -117,7 +117,7 @@ const DistributorDashboard = () => {
 
     try {
       // Fetch retailers using correct endpoint
-      const retailerEndpoint = `${API_BASE_URL}/retailer/get/distributor/${distributorId}`;
+const retailerEndpoint = `${API_BASE_URL}/retailer/get/distributor/${distributorId}?limit=100&offset=0`;
       console.log("📡 Retailers endpoint:", retailerEndpoint);
       
       const res = await axios.get(retailerEndpoint, {

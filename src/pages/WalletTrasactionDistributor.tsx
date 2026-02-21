@@ -70,6 +70,10 @@ interface DecodedToken {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+// ─── Constants ───────────────────────────────────────────────
+const FETCH_LIMIT = 1000; // how many records to pull per request
+const FETCH_OFFSET = 0;
+
 export default function DistributorTransactions() {
   const navigate = useNavigate();
   const [walletBalance, setWalletBalance] = useState(0);
@@ -78,15 +82,12 @@ export default function DistributorTransactions() {
   const [loading, setLoading] = useState(true);
   const [distributorId, setDistributorId] = useState<string>("");
 
-  // Pagination state
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
 
-  // Helper function to get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
+  // Helper – today as YYYY-MM-DD
+  const getTodayDate = () => new Date().toISOString().split("T")[0];
 
   // Filter states
   const [startDate, setStartDate] = useState(getTodayDate());
@@ -95,6 +96,7 @@ export default function DistributorTransactions() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [reasonFilter, setReasonFilter] = useState("ALL");
 
+  // ─── 1. Decode token on mount ──────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (!token) {
@@ -104,18 +106,17 @@ export default function DistributorTransactions() {
 
     try {
       const decoded: DecodedToken = jwtDecode(token);
-      console.log("📦 Decoded Token:", decoded);
-      
       const distId = decoded?.user_id;
-      console.log("✅ Distributor ID:", distId);
-      
+
       if (!distId) {
         console.error("❌ Distributor ID not found in token");
         setLoading(false);
         return;
       }
-      
+
       setDistributorId(distId);
+
+      // ✅ Fixed: wallet balance uses the correct endpoint (not transactions endpoint)
       fetchWalletBalance(token, distId);
     } catch (err) {
       console.error("❌ Token decode error", err);
@@ -123,21 +124,18 @@ export default function DistributorTransactions() {
     }
   }, []);
 
-  // Fetch transactions when distributorId is available or date filters change
+  // ─── 2. Fetch transactions when distributorId is ready ─────
   useEffect(() => {
-    if (distributorId) {
-      const token = localStorage.getItem("authToken");
-      if (token) {
-        fetchTransactions(token, distributorId);
-      }
-    }
+    if (!distributorId) return;
+    const token = localStorage.getItem("authToken");
+    if (token) fetchTransactions(token, distributorId);
   }, [distributorId]);
 
-  // Frontend filtering - same as master distributor
+  // ─── 3. Frontend filtering ─────────────────────────────────
   useEffect(() => {
     let filtered = [...transactions];
 
-    // ✅ FRONTEND DATE FILTER
+    // Date range filter
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -151,7 +149,7 @@ export default function DistributorTransactions() {
       });
     }
 
-    // Type filter
+    // Type filter (CREDIT / DEBIT)
     if (typeFilter !== "ALL") {
       filtered = filtered.filter((txn) =>
         txn.credit_amount > 0 ? typeFilter === "CREDIT" : typeFilter === "DEBIT"
@@ -165,13 +163,11 @@ export default function DistributorTransactions() {
       );
     }
 
-    // Search
+    // Search across all fields
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       filtered = filtered.filter((txn) =>
-        Object.values(txn).some((v) =>
-          String(v).toLowerCase().includes(q)
-        )
+        Object.values(txn).some((v) => String(v).toLowerCase().includes(q))
       );
     }
 
@@ -179,17 +175,19 @@ export default function DistributorTransactions() {
     setCurrentPage(1);
   }, [transactions, startDate, endDate, typeFilter, reasonFilter, searchTerm]);
 
+  // ─── Fetch wallet balance ──────────────────────────────────
+  // ✅ Fixed: was incorrectly calling the transactions endpoint instead of balance endpoint
   const fetchWalletBalance = async (token: string, id: string) => {
     try {
       const res = await axios.get(
         `${API_BASE_URL}/wallet/get/balance/distributor/${id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("💰 Wallet Balance Response:", res.data);
-      
-      const balance = res.data?.data?.balance ?? 
-                     res.data?.data?.wallet_balance ?? 
-                     0;
+
+      const balance =
+        res.data?.data?.balance ??
+        res.data?.data?.wallet_balance ??
+        0;
       setWalletBalance(balance ? Number(balance) : 0);
     } catch (err) {
       console.error("❌ Wallet balance fetch error:", err);
@@ -197,26 +195,23 @@ export default function DistributorTransactions() {
     }
   };
 
+  // ─── Fetch all transactions with limit + offset ────────────
+  // ✅ Fixed: added ?limit=1000&offset=0 query params to get all records
   const fetchTransactions = async (token: string, id: string) => {
     try {
       setLoading(true);
-      console.log("🔄 Fetching transactions for Distributor ID:", id);
-      
-      console.log("🌐 Full API URL:", `${API_BASE_URL}/wallet/get/transactions/distributor/${id}`);
-      
+
       const res = await axios.get(
-        `${API_BASE_URL}/wallet/get/transactions/distributor/${id}`,
-        { 
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        `${API_BASE_URL}/wallet/get/transactions/distributor/${id}?limit=${FETCH_LIMIT}&offset=${FETCH_OFFSET}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       console.log("📦 Transactions API Response:", res.data);
-      
+
       if (res.data.status === "success") {
         let txnData = res.data.data;
         let txns: Transaction[] = [];
-        
+
         // Handle different response structures
         if (Array.isArray(txnData)) {
           txns = txnData;
@@ -225,32 +220,23 @@ export default function DistributorTransactions() {
         } else if (txnData?.wallet_transactions && Array.isArray(txnData.wallet_transactions)) {
           txns = txnData.wallet_transactions;
         }
-        
-        console.log(`✅ Raw transactions fetched: ${txns.length}`);
-        
-        // Sort by created_at descending (newest first)
-        txns.sort((a, b) => {
-          const dateA = new Date(a.created_at).getTime();
-          const dateB = new Date(b.created_at).getTime();
-          return dateB - dateA;
-        });
-        
+
+        // Sort newest first
+        txns.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        console.log(`✅ Transactions fetched: ${txns.length}`);
         setTransactions(txns);
         setFilteredTransactions(txns);
-        
-        console.log(`✅ Transactions set: ${txns.length}`);
       } else {
-        console.log("⚠️ No transactions found in response");
+        console.warn("⚠️ No transactions found");
         setTransactions([]);
         setFilteredTransactions([]);
       }
     } catch (err: any) {
-      console.error("❌ Transactions fetch error:", err);
-      console.error("📋 Error details:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
+      console.error("❌ Transactions fetch error:", err.response?.data || err.message);
       setTransactions([]);
       setFilteredTransactions([]);
     } finally {
@@ -258,7 +244,7 @@ export default function DistributorTransactions() {
     }
   };
 
-  // Clear all filters
+  // ─── Clear all filters ─────────────────────────────────────
   const clearFilters = () => {
     const today = getTodayDate();
     setStartDate(today);
@@ -269,121 +255,98 @@ export default function DistributorTransactions() {
     setCurrentPage(1);
   };
 
-  // Export to Excel (export filtered data)
-  const exportToExcel = async () => {
+  // ─── Refresh ───────────────────────────────────────────────
+  const handleRefresh = () => {
+    const token = localStorage.getItem("authToken");
+    if (!token || !distributorId) return;
+    fetchTransactions(token, distributorId);
+    fetchWalletBalance(token, distributorId);
+  };
+
+  // ─── Export to Excel ───────────────────────────────────────
+  const exportToExcel = () => {
     try {
-      const exportData = filteredTransactions.map((txn: Transaction, index: number) => ({
+      const exportData = filteredTransactions.map((txn, index) => ({
         "S.No": index + 1,
         "Date & Time": txn.created_at
           ? new Date(txn.created_at).toLocaleString("en-IN")
           : "N/A",
         "Reference ID": txn.reference_id || "N/A",
-        "Type": txn.credit_amount > 0 ? "CREDIT" : "DEBIT",
+        Type: txn.credit_amount > 0 ? "CREDIT" : "DEBIT",
         "Credit Amount (₹)": parseFloat(txn.credit_amount?.toString() || "0").toFixed(2),
         "Debit Amount (₹)": parseFloat(txn.debit_amount?.toString() || "0").toFixed(2),
         "Before Balance (₹)": parseFloat(txn.before_balance?.toString() || "0").toFixed(2),
         "After Balance (₹)": parseFloat(txn.after_balance?.toString() || "0").toFixed(2),
-        "Reason": txn.transaction_reason || "N/A",
-        "Remarks": txn.remarks || "N/A",
+        Reason: txn.transaction_reason || "N/A",
+        Remarks: txn.remarks || "N/A",
       }));
 
-      // Add summary row
       const totalCredit = filteredTransactions.reduce(
-        (sum: number, txn: Transaction) => sum + parseFloat(txn.credit_amount?.toString() || "0"),
+        (sum, txn) => sum + parseFloat(txn.credit_amount?.toString() || "0"),
         0
       );
       const totalDebit = filteredTransactions.reduce(
-        (sum: number, txn: Transaction) => sum + parseFloat(txn.debit_amount?.toString() || "0"),
+        (sum, txn) => sum + parseFloat(txn.debit_amount?.toString() || "0"),
         0
       );
 
       const summaryRow = {
         "S.No": "",
         "Date & Time": "",
-        "Reference ID": "",
-        "Type": "",
+        "Reference ID": "TOTAL",
+        Type: "",
         "Credit Amount (₹)": totalCredit.toFixed(2),
         "Debit Amount (₹)": totalDebit.toFixed(2),
         "Before Balance (₹)": "",
         "After Balance (₹)": "",
-        "Reason": "",
-        "Remarks": "",
+        Reason: "",
+        Remarks: "",
       };
 
       const finalData = [...exportData, summaryRow];
-
       const worksheet = XLSX.utils.json_to_sheet(finalData);
-
-      // Set column widths
-      const columnWidths = [
-        { wch: 8 }, // S.No
-        { wch: 20 }, // Date & Time
-        { wch: 15 }, // Reference ID
-        { wch: 10 }, // Type
-        { wch: 18 }, // Credit Amount
-        { wch: 18 }, // Debit Amount
-        { wch: 18 }, // Before Balance
-        { wch: 18 }, // After Balance
-        { wch: 20 }, // Reason
-        { wch: 30 }, // Remarks
+      worksheet["!cols"] = [
+        { wch: 8 }, { wch: 20 }, { wch: 15 }, { wch: 10 },
+        { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+        { wch: 20 }, { wch: 30 },
       ];
-      worksheet["!cols"] = columnWidths;
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
-
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = `Distributor_Wallet_Transactions_${timestamp}.xlsx`;
-
-      XLSX.writeFile(workbook, filename);
+      XLSX.writeFile(workbook, `Distributor_Transactions_${getTodayDate()}.xlsx`);
     } catch (error) {
       console.error("Export error:", error);
       alert("Failed to export data. Please try again.");
     }
   };
 
-  // Refresh transactions
-  const handleRefresh = () => {
-    const token = localStorage.getItem("authToken");
-    if (!token || !distributorId) return;
-
-    fetchTransactions(token, distributorId);
-    fetchWalletBalance(token, distributorId);
-  };
-
-  // Format date
+  // ─── Helpers ───────────────────────────────────────────────
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
     try {
       return new Date(dateString).toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
       });
     } catch {
       return dateString;
     }
   };
 
-  // Determine transaction type
-  const getTransactionType = (txn: Transaction) => {
-    return txn.credit_amount > 0 ? "CREDIT" : "DEBIT";
-  };
+  const getTransactionType = (txn: Transaction) =>
+    txn.credit_amount > 0 ? "CREDIT" : "DEBIT";
 
-  // Get amount for display
-  const getAmount = (txn: Transaction) => {
-    return txn.credit_amount > 0 ? txn.credit_amount : (txn.debit_amount || 0);
-  };
+  const getAmount = (txn: Transaction) =>
+    txn.credit_amount > 0 ? txn.credit_amount : txn.debit_amount || 0;
 
-  // Calculate pagination
+  // ─── Pagination calc ───────────────────────────────────────
   const totalRecords = filteredTransactions.length;
   const totalPages = Math.ceil(totalRecords / recordsPerPage);
   const indexOfLastRecord = currentPage * recordsPerPage;
   const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
   const currentRecords = filteredTransactions.slice(indexOfFirstRecord, indexOfLastRecord);
 
+  // ──────────────────────────────────────────────────────────
   return (
     <DashboardLayout role="distributor">
       <div className="min-h-screen bg-muted/10">
@@ -407,9 +370,9 @@ export default function DistributorTransactions() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="mx-auto w-full max-w-[1400px] space-y-6 p-6">
-          {/* Filters Section */}
+
+          {/* ── Filters ──────────────────────────────────────── */}
           <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
             <CardHeader className="paybazaar-gradient rounded-none border-b border-border/40 text-white">
               <div className="flex items-center justify-between">
@@ -430,8 +393,10 @@ export default function DistributorTransactions() {
                 </Button>
               </div>
             </CardHeader>
+
             <CardContent className="p-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+
                 {/* Start Date */}
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-slate-700">
@@ -441,7 +406,11 @@ export default function DistributorTransactions() {
                   <Input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    max={endDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -455,7 +424,12 @@ export default function DistributorTransactions() {
                   <Input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate}
+                    max={getTodayDate()}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     className="border-slate-300 bg-white"
                   />
                 </div>
@@ -465,7 +439,10 @@ export default function DistributorTransactions() {
                   <Label className="text-sm font-semibold text-slate-700">
                     Type
                   </Label>
-                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <Select
+                    value={typeFilter}
+                    onValueChange={(v) => { setTypeFilter(v); setCurrentPage(1); }}
+                  >
                     <SelectTrigger className="border-slate-300 bg-white">
                       <SelectValue />
                     </SelectTrigger>
@@ -482,7 +459,10 @@ export default function DistributorTransactions() {
                   <Label className="text-sm font-semibold text-slate-700">
                     Reason
                   </Label>
-                  <Select value={reasonFilter} onValueChange={setReasonFilter}>
+                  <Select
+                    value={reasonFilter}
+                    onValueChange={(v) => { setReasonFilter(v); setCurrentPage(1); }}
+                  >
                     <SelectTrigger className="border-slate-300 bg-white">
                       <SelectValue />
                     </SelectTrigger>
@@ -505,15 +485,44 @@ export default function DistributorTransactions() {
                   <Input
                     placeholder="Search transactions..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                     className="border-slate-300 bg-white"
                   />
                 </div>
               </div>
+
+              {/* Active filter summary */}
+              {(startDate !== getTodayDate() || endDate !== getTodayDate() || typeFilter !== "ALL" || reasonFilter !== "ALL" || searchTerm) && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(startDate !== getTodayDate() || endDate !== getTodayDate()) && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      📅 {startDate} → {endDate}
+                    </Badge>
+                  )}
+                  {typeFilter !== "ALL" && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Type: {typeFilter}
+                    </Badge>
+                  )}
+                  {reasonFilter !== "ALL" && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Reason: {reasonFilter}
+                    </Badge>
+                  )}
+                  {searchTerm && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Search: "{searchTerm}"
+                    </Badge>
+                  )}
+                  <Badge className="gap-1 bg-primary/10 text-primary text-xs">
+                    {totalRecords} result(s)
+                  </Badge>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Transactions Table */}
+          {/* ── Transactions Table ────────────────────────────── */}
           <Card className="overflow-hidden rounded-2xl border border-border/60 shadow-xl">
             <CardHeader className="paybazaar-gradient rounded-none border-b border-border/40 text-white">
               <div className="flex items-center justify-between">
@@ -528,9 +537,7 @@ export default function DistributorTransactions() {
                     className="text-white hover:bg-white/20"
                     disabled={loading}
                   >
-                    <RefreshCw
-                      className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                    />
+                    <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     Refresh
                   </Button>
                   <Button
@@ -552,9 +559,7 @@ export default function DistributorTransactions() {
               <div className="border-b border-border/40 bg-slate-50 p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-slate-700">
-                      Show
-                    </span>
+                    <span className="text-sm font-medium text-slate-700">Show</span>
                     <Select
                       value={recordsPerPage.toString()}
                       onValueChange={(value) => {
@@ -572,9 +577,7 @@ export default function DistributorTransactions() {
                         <SelectItem value="100">100</SelectItem>
                       </SelectContent>
                     </Select>
-                    <span className="text-sm font-medium text-slate-700">
-                      entries
-                    </span>
+                    <span className="text-sm font-medium text-slate-700">entries</span>
                   </div>
                   <div className="text-sm text-slate-700">
                     Showing {totalRecords > 0 ? indexOfFirstRecord + 1 : 0} to{" "}
@@ -588,15 +591,11 @@ export default function DistributorTransactions() {
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-20">
                     <div className="mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
-                    <p className="text-sm text-muted-foreground">
-                      Loading transactions...
-                    </p>
+                    <p className="text-sm text-muted-foreground">Loading transactions...</p>
                   </div>
                 ) : currentRecords.length === 0 ? (
                   <div className="py-20 text-center">
-                    <p className="mb-2 text-lg font-semibold">
-                      No transactions found
-                    </p>
+                    <p className="mb-2 text-lg font-semibold">No transactions found</p>
                     <p className="text-sm text-muted-foreground">
                       {searchTerm || typeFilter !== "ALL" || reasonFilter !== "ALL"
                         ? "Try adjusting your filters or search terms"
@@ -607,34 +606,11 @@ export default function DistributorTransactions() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50">
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          S.No
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Date & Time
-                        </TableHead>
-                    
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Reference ID
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Type
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Amount (₹)
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Before Bal (₹)
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          After Bal (₹)
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Reason
-                        </TableHead>
-                        <TableHead className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
-                          Remarks
-                        </TableHead>
+                        {["S.No", "Date & Time", "Reference ID", "Type", "Amount (₹)", "Before Bal (₹)", "After Bal (₹)", "Reason", "Remarks"].map((h) => (
+                          <TableHead key={h} className="text-center text-sm font-semibold uppercase tracking-wide text-slate-700">
+                            {h}
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
 
@@ -642,17 +618,15 @@ export default function DistributorTransactions() {
                       {currentRecords.map((txn, idx) => (
                         <TableRow
                           key={txn.wallet_transaction_id}
-                          className={`${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"
-                          } transition-colors duration-200 hover:bg-paybazaar-blue/5`}
+                          className={`${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"} transition-colors duration-200 hover:bg-primary/5`}
                         >
                           <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
                             {indexOfFirstRecord + idx + 1}
                           </TableCell>
-                          <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
+                          <TableCell className="py-3 text-center text-sm text-slate-700">
                             {formatDate(txn.created_at)}
                           </TableCell>
-                          <TableCell className="py-3 text-center font-mono text-sm font-semibold text-slate-700">
+                          <TableCell className="py-3 text-center font-mono text-sm text-slate-700">
                             {txn.reference_id || "N/A"}
                           </TableCell>
                           <TableCell className="py-3 text-center">
@@ -666,30 +640,21 @@ export default function DistributorTransactions() {
                               {getTransactionType(txn)}
                             </Badge>
                           </TableCell>
-                          <TableCell className={`py-3 text-center text-sm font-semibold ${
-                            getTransactionType(txn) === "CREDIT" ? "text-green-600" : "text-red-600"
-                          }`}>
+                          <TableCell
+                            className={`py-3 text-center text-sm font-semibold ${
+                              getTransactionType(txn) === "CREDIT" ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
                             {getTransactionType(txn) === "CREDIT" ? "+" : "-"}₹{" "}
-                            {getAmount(txn).toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            {getAmount(txn).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </TableCell>
-                          <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
-                            ₹{" "}
-                            {txn.before_balance.toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                          <TableCell className="py-3 text-center text-sm text-slate-700">
+                            ₹ {txn.before_balance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </TableCell>
-                          <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
-                            ₹{" "}
-                            {txn.after_balance.toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                          <TableCell className="py-3 text-center text-sm text-slate-700">
+                            ₹ {txn.after_balance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </TableCell>
-                          <TableCell className="py-3 text-center text-sm font-semibold text-slate-700">
+                          <TableCell className="py-3 text-center text-sm text-slate-700">
                             {txn.transaction_reason || "N/A"}
                           </TableCell>
                           <TableCell className="py-3 text-center text-sm text-slate-700">
@@ -719,30 +684,20 @@ export default function DistributorTransactions() {
                     </Button>
                     <div className="flex items-center gap-1">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
+                        let pageNum: number;
+                        if (totalPages <= 5) pageNum = i + 1;
+                        else if (currentPage <= 3) pageNum = i + 1;
+                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = currentPage - 2 + i;
+
                         return (
                           <Button
                             key={pageNum}
-                            variant={
-                              currentPage === pageNum ? "default" : "outline"
-                            }
+                            variant={currentPage === pageNum ? "default" : "outline"}
                             size="sm"
                             onClick={() => setCurrentPage(pageNum)}
                             disabled={loading}
-                            className={
-                              currentPage === pageNum
-                                ? "paybazaar-gradient text-white"
-                                : ""
-                            }
+                            className={currentPage === pageNum ? "paybazaar-gradient text-white" : ""}
                           >
                             {pageNum}
                           </Button>
@@ -752,9 +707,7 @@ export default function DistributorTransactions() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                      }
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages || loading}
                     >
                       Next

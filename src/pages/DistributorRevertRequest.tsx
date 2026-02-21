@@ -1,18 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { jwtDecode } from "jwt-decode";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, RotateCcw, ArrowLeft, User, Wallet, Phone, CreditCard } from "lucide-react";
+import { Loader2, RotateCcw, ArrowLeft, User, Wallet, Phone, CreditCard, ChevronDown, Search, X } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useNavigate } from "react-router-dom";
 
@@ -27,9 +20,9 @@ interface DecodedToken {
 
 interface Retailer {
   retailer_id: string;
+  retailer_name: string;
+  retailer_phone: string;
   distributor_id: string;
-  name: string;
-  phone: string;
   email: string;
   wallet_balance: number;
   is_blocked: boolean;
@@ -45,7 +38,10 @@ interface UserDetails {
 export default function DistributorRevertRequest() {
   const navigate = useNavigate();
   const [selectedRetailerId, setSelectedRetailerId] = useState("");
+  const [selectedRetailerLabel, setSelectedRetailerLabel] = useState("");
   const [retailers, setRetailers] = useState<Retailer[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [remarks, setRemarks] = useState("");
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
@@ -54,10 +50,32 @@ export default function DistributorRevertRequest() {
   const [distributorId, setDistributorId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+        setSearchQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (dropdownOpen && searchRef.current) {
+      setTimeout(() => searchRef.current?.focus(), 50);
+    }
+  }, [dropdownOpen]);
+
   // Decode token and get distributor ID
   useEffect(() => {
     const token = localStorage.getItem("authToken");
-    
+
     if (!token) {
       setLoading(false);
       return;
@@ -65,9 +83,7 @@ export default function DistributorRevertRequest() {
 
     try {
       const decoded: DecodedToken = jwtDecode(token);
-      console.log("Decoded Token:", decoded);
-      
-      // ✅ Token expiry check
+
       if (decoded.exp * 1000 < Date.now()) {
         localStorage.removeItem("authToken");
         toast.error("Session expired. Please login again.");
@@ -75,17 +91,14 @@ export default function DistributorRevertRequest() {
         return;
       }
 
-      // ✅ Get user_id from token (this is the Distributor ID)
-      const distributorId = decoded?.user_id;
-      console.log("Distributor ID:", distributorId);
-      
-      if (!distributorId) {
+      const distId = decoded?.user_id;
+      if (!distId) {
         console.error("Distributor ID not found in token");
         setLoading(false);
         return;
       }
 
-      setDistributorId(distributorId);
+      setDistributorId(distId);
     } catch (err) {
       console.error("Token decode error", err);
       toast.error("Invalid session. Please login again.");
@@ -94,19 +107,17 @@ export default function DistributorRevertRequest() {
     }
   }, []);
 
-  // Fetch retailers list when distributorId is available
+  // Fetch all retailers with offset/limit
   useEffect(() => {
     if (!distributorId) return;
 
     const fetchRetailers = async () => {
       setIsLoadingRetailers(true);
       const token = localStorage.getItem("authToken");
-      
+
       try {
-        const endpoint = `${import.meta.env.VITE_API_BASE_URL}/retailer/get/distributor/${distributorId}`;
-        
-        console.log("Fetching retailers from:", endpoint);
-        
+        const endpoint = `${import.meta.env.VITE_API_BASE_URL}/retailer/get/distributor/${distributorId}?limit=100&offset=0`;
+
         const response = await fetch(endpoint, {
           method: "GET",
           headers: {
@@ -116,19 +127,17 @@ export default function DistributorRevertRequest() {
         });
 
         const data = await response.json();
-        console.log("Retailers response:", data);
 
         if (response.ok && data.status === "success") {
-          const retailersList = data.data.retailers || [];
+          const retailersList: Retailer[] = data.data.retailers || [];
           setRetailers(retailersList);
-          
+
           if (retailersList.length === 0) {
             toast.info("No retailers found under your account");
           } else {
             toast.success(`Loaded ${retailersList.length} retailer(s)`);
           }
         } else {
-          console.error("Failed to fetch retailers:", data);
           toast.error(data.message || "Failed to load retailers");
           setRetailers([]);
         }
@@ -153,9 +162,7 @@ export default function DistributorRevertRequest() {
 
     try {
       const endpoint = `${import.meta.env.VITE_API_BASE_URL}/retailer/get/retailer/${retailerId}`;
-      
-      console.log("Fetching retailer details from:", endpoint);
-      
+
       const response = await fetch(endpoint, {
         method: "GET",
         headers: {
@@ -165,22 +172,20 @@ export default function DistributorRevertRequest() {
       });
 
       const data = await response.json();
-      console.log("Retailer details response:", data);
 
       if (response.ok && data.status === "success") {
         const retailer = data.data.retailer;
-        
+
         const details: UserDetails = {
           name: retailer.retailer_name || "N/A",
           phone: retailer.retailer_phone || "N/A",
           userId: retailer.retailer_id || "N/A",
           currentBalance: Number(retailer.wallet_balance) || 0,
         };
-        
+
         setUserDetails(details);
         toast.success(`Selected: ${details.name}`);
       } else {
-        console.error("Failed to fetch retailer details:", data);
         toast.error(data.message || "Failed to load retailer details");
         setUserDetails(null);
       }
@@ -191,11 +196,33 @@ export default function DistributorRevertRequest() {
     }
   };
 
-  // Handle retailer selection
-  const handleRetailerChange = (retailerId: string) => {
-    setSelectedRetailerId(retailerId);
-    fetchRetailerDetails(retailerId);
+  // Handle retailer selection from custom dropdown
+  const handleRetailerSelect = (retailer: Retailer) => {
+    setSelectedRetailerId(retailer.retailer_id);
+    setSelectedRetailerLabel(retailer.retailer_name);
+    setDropdownOpen(false);
+    setSearchQuery("");
+    fetchRetailerDetails(retailer.retailer_id);
   };
+
+  // Clear selection
+  const handleClearSelection = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedRetailerId("");
+    setSelectedRetailerLabel("");
+    setUserDetails(null);
+    setAmount("");
+    setRemarks("");
+  };
+
+  // Filtered retailers based on search query (name or phone)
+  const filteredRetailers = retailers.filter((r) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      r.retailer_name?.toLowerCase().includes(q) ||
+      r.retailer_phone?.toLowerCase().includes(q)
+    );
+  });
 
   const handleRevert = async () => {
     if (!userDetails) {
@@ -209,11 +236,8 @@ export default function DistributorRevertRequest() {
     }
 
     const revertAmount = parseFloat(amount);
-    if (revertAmount > retailers.wallet_balance) {
-      console.error("Insufficient balance:", {
-        requested: revertAmount,
-        available: userDetails.currentBalance,
-      });
+
+    if (revertAmount > userDetails.currentBalance) {
       toast.error(
         `Insufficient balance of Retailer for revert. Current balance: ₹${userDetails.currentBalance.toFixed(2)}`
       );
@@ -237,8 +261,6 @@ export default function DistributorRevertRequest() {
         remarks: remarks.trim() || "Revert request processed by distributor",
       };
 
-      console.log("Sending revert request:", payload);
-
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -249,21 +271,16 @@ export default function DistributorRevertRequest() {
       });
 
       const data = await response.json();
-      console.log("Revert response:", data);
 
       if (response.ok && (data.status === "success" || data.success)) {
         toast.success(data.message || data.msg || "Revert processed successfully");
-        
-        // Reset form
         setAmount("");
         setRemarks("");
         setUserDetails(null);
         setSelectedRetailerId("");
-        
-        // Refresh retailers list to get updated balances
+        setSelectedRetailerLabel("");
         window.location.reload();
       } else {
-        console.error("Revert failed:", data);
         toast.error(data.message || data.msg || "Failed to process revert");
       }
     } catch (error) {
@@ -276,9 +293,11 @@ export default function DistributorRevertRequest() {
 
   const handleReset = () => {
     setSelectedRetailerId("");
+    setSelectedRetailerLabel("");
     setAmount("");
     setRemarks("");
     setUserDetails(null);
+    setSearchQuery("");
     toast.info("Form reset");
   };
 
@@ -352,54 +371,116 @@ export default function DistributorRevertRequest() {
 
             <CardContent className="bg-gradient-to-br from-background to-muted/30 p-8">
               <div className="space-y-6">
-                {/* Retailer Selection Dropdown */}
+
+                {/* ── Retailer Searchable Dropdown ── */}
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="retailer"
-                    className="flex items-center gap-2 text-sm font-semibold text-foreground"
-                  >
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <User className="h-4 w-4" />
                     Select Retailer
                     <span className="text-destructive">*</span>
                   </Label>
+
                   {isLoadingRetailers ? (
                     <div className="flex items-center justify-center rounded-lg border-2 border-border bg-background p-4">
                       <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
-                      <span className="text-sm text-muted-foreground">
-                        Loading retailers...
-                      </span>
+                      <span className="text-sm text-muted-foreground">Loading retailers...</span>
                     </div>
                   ) : retailers.length === 0 ? (
                     <div className="rounded-lg border-2 border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
                       No retailers found under your account
                     </div>
                   ) : (
-                    <Select
-                      value={selectedRetailerId}
-                      onValueChange={handleRetailerChange}
-                    >
-                      <SelectTrigger className="h-12 border-2 border-border bg-background transition-colors focus:border-primary">
-                        <SelectValue placeholder="-- Select Retailer --" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {retailers.map((retailer) => (
-                          <SelectItem
-                            key={retailer.retailer_id}
-                            value={retailer.retailer_id}
-                          >
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4" />
-                                <span className="font-medium">{retailer.retailer_name}</span>
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                {retailer.retailer_phone} • Balance: ₹{formatAmount(retailer.wallet_balance)}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="relative" ref={dropdownRef}>
+
+                      {/* Trigger */}
+                      <button
+                        type="button"
+                        onClick={() => setDropdownOpen((prev) => !prev)}
+                        className="flex h-12 w-full items-center justify-between rounded-md border-2 border-border bg-background px-3 text-sm transition-colors hover:border-primary focus:border-primary focus:outline-none"
+                      >
+                        <span className={selectedRetailerLabel ? "font-medium text-foreground" : "text-muted-foreground"}>
+                          {selectedRetailerLabel || "-- Select Retailer --"}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {selectedRetailerId && (
+                            <span
+                              onClick={handleClearSelection}
+                              className="cursor-pointer rounded p-0.5 hover:bg-muted"
+                            >
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                              dropdownOpen ? "rotate-180" : ""
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {/* Dropdown Panel */}
+                      {dropdownOpen && (
+                        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-background shadow-lg">
+
+                          {/* Search Input */}
+                          <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <input
+                              ref={searchRef}
+                              type="text"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              placeholder="Search by name or phone..."
+                              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                            />
+                            {searchQuery && (
+                              <button
+                                onClick={() => setSearchQuery("")}
+                                className="shrink-0"
+                              >
+                                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Retailer List */}
+                          <ul className="max-h-60 overflow-y-auto py-1">
+                            {filteredRetailers.length === 0 ? (
+                              <li className="px-3 py-4 text-center text-sm text-muted-foreground">
+                                No retailers match your search
+                              </li>
+                            ) : (
+                              filteredRetailers.map((retailer) => (
+                                <li
+                                  key={retailer.retailer_id}
+                                  onClick={() => handleRetailerSelect(retailer)}
+                                  className={`flex cursor-pointer flex-col gap-0.5 px-3 py-2.5 transition-colors hover:bg-muted ${
+                                    selectedRetailerId === retailer.retailer_id
+                                      ? "bg-primary/10"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="text-sm font-medium text-foreground">
+                                      {retailer.retailer_name}
+                                    </span>
+                                  </div>
+                                  <span className="pl-5 text-xs text-muted-foreground">
+                                    {retailer.retailer_phone} • Balance: ₹{formatAmount(retailer.wallet_balance)}
+                                  </span>
+                                </li>
+                              ))
+                            )}
+                          </ul>
+
+                          {/* Footer Count */}
+                          <div className="border-t border-border bg-muted/10 px-3 py-1.5 text-xs text-muted-foreground">
+                            Showing {filteredRetailers.length} of {retailers.length} retailer(s)
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -507,7 +588,7 @@ export default function DistributorRevertRequest() {
                 {/* Summary Box */}
                 {amount && parseFloat(amount) > 0 && userDetails && (
                   <div className="rounded-lg border-2 border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20">
-                    <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-3">
+                    <h3 className="mb-3 text-sm font-semibold text-red-900 dark:text-red-100">
                       Revert Summary
                     </h3>
                     <div className="space-y-2">
@@ -517,7 +598,7 @@ export default function DistributorRevertRequest() {
                           ₹{formatAmount(parseFloat(amount))}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-red-200 dark:border-red-800">
+                      <div className="flex items-center justify-between border-t border-red-200 pt-2 dark:border-red-800">
                         <span className="text-sm text-red-700 dark:text-red-300">New Balance (After Revert):</span>
                         <span className="text-base font-semibold text-red-900 dark:text-red-100">
                           ₹{formatAmount(userDetails.currentBalance - parseFloat(amount))}
@@ -527,7 +608,7 @@ export default function DistributorRevertRequest() {
                   </div>
                 )}
 
-                {/* Submit Button */}
+                {/* Submit Buttons */}
                 <div className="flex gap-4 pt-4">
                   <Button
                     type="button"
@@ -569,24 +650,24 @@ export default function DistributorRevertRequest() {
           {/* Info Note */}
           <Card className="border-border/60 bg-muted/30">
             <CardContent className="p-6">
-              <h3 className="text-sm font-semibold text-foreground mb-2">
+              <h3 className="mb-2 text-sm font-semibold text-foreground">
                 Important Notes:
               </h3>
               <ul className="space-y-1 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
-                  <span className="text-primary mt-1">•</span>
+                  <span className="mt-1 text-primary">•</span>
                   <span>Select a retailer from the dropdown to view their details</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary mt-1">•</span>
+                  <span className="mt-1 text-primary">•</span>
                   <span>Revert amount cannot exceed the retailer's current wallet balance</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary mt-1">•</span>
+                  <span className="mt-1 text-primary">•</span>
                   <span>All revert transactions are logged and can be tracked</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary mt-1">•</span>
+                  <span className="mt-1 text-primary">•</span>
                   <span>Remarks are optional but recommended for record-keeping</span>
                 </li>
               </ul>

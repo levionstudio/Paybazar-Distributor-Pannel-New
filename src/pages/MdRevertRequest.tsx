@@ -118,10 +118,9 @@ export default function MdRevertRequest() {
         let endpoint = "";
         
         if (userType === "distributor") {
-          endpoint = `${import.meta.env.VITE_API_BASE_URL}/distributor/get/md/${masterDistributorId}`;
+          endpoint = `${import.meta.env.VITE_API_BASE_URL}/distributor/get/md/${masterDistributorId}?limit=1000&page=1`;
         } else if (userType === "retailer") {
-          endpoint = `${import.meta.env.VITE_API_BASE_URL}/retailer/get/md/${masterDistributorId}`;
-        }
+endpoint = `${import.meta.env.VITE_API_BASE_URL}/retailer/get/md/${masterDistributorId}?limit=1000&page=1`;        }
 
         console.log("Fetching users from:", endpoint);
 
