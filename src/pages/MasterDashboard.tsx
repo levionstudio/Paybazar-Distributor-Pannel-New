@@ -118,7 +118,7 @@ const MasterDashboard = () => {
 
     try {
       // Fetch distributors using correct endpoint
-      const distEndpoint = `${API_BASE_URL}/distributor/get/md/${masterDistributorId}`;
+const distEndpoint = `${API_BASE_URL}/distributor/get/md/${masterDistributorId}?limit=1000&offset=0`;
       console.log("📡 Distributors endpoint:", distEndpoint);
       
       const distRes = await axios.get(distEndpoint, {
